@@ -1,4 +1,3 @@
-[![Build Arduino Sketch](https://github.com/coppermilk/wiener_linien_esp32_monitor/actions/workflows/main.yml/badge.svg)](https://github.com/coppermilk/wiener_linien_esp32_monitor/actions/workflows/main.yml)
 # Wiener Linien ESP32-S3 Public Transport Departure Monitor
 
 This repository is a reworked version of the [original one by coppermilk](https://github.com/coppermilk/wiener_linien_esp32_monitor).
@@ -17,7 +16,10 @@ This repository is a reworked version of the [original one by coppermilk](https:
 - **Power Saving Modes**: Different modes for power saving are enabled automatically when no data is received.
 - **User Button Control**: Each Button now supports 3 different types of control - short, long and double press.
 - **Automatic Layout Switch**: When the number of monitors is less than the configured number, then the layout changes.
-- **Performance Improvements**: Buttons now work interrrupt based.
+- **Improvements**: Buttons now work interrrupt based, more information is displayed for each monitor and scrolling text has a short delay at start and finish.
+
+## More Information
+Each monitor now displays the name of the stop and if the vehicle is accessible to wheelchairs. Vehicles that have different directions are combined in a single monitor - e.g. the tram is being withdrawn from the railway. When only one monitor is available it can show up to 6 vehicles, depending on the configured layout.
 
 ## Dimming Button
 Short pressing on the Dimming Button (right of the USB port) will dim the screen.
