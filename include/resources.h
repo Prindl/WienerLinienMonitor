@@ -1,7 +1,7 @@
 #ifndef __STRINGS_H__
 #define __STRINGS_H__
 
-#include <FS.h>
+#include <WString.h>
 
 /**
  * @struct StringDatabase

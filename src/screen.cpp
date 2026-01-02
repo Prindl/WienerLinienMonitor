@@ -70,7 +70,6 @@ bool Screen::IsEnoughSpaceForMiddleText(const String& str) {
 }
 
 void Screen::PrintCordDebug() {
-// #ifdef DEBUG_SERIAL_WIEN_MONITOR
     // Print the contents of the vectors
     for (int i = 0; i < vec_scrolls_coords.size(); i++) {
         Serial.print("[");

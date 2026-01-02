@@ -1,23 +1,12 @@
-#include <ArduinoJson.h>  // by Benoit Blanchon 6.21.3
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <FS.h>
-#include <HTTPClient.h>
 #include <limits>
-#include <map>
-#include <SPIFFS.h>
-#include <SPI.h>
-#include <TFT_eSPI.h>  // by Bodmer 2.5.43, user config 206
-#include <unordered_map>
-#include <vector>
 #include <WiFiManager.h>  // by tzapu 2.0.16
 
-#include "user_button.h"
-#include "config.h"
 #include "resources.h"
-#include "screen.h"
-#include "traffic.h"
+#include "config.h"
+#include "user_button.h"
 #include "wiener_linien.h"
 #include "power_manager.h"
 
@@ -215,20 +204,11 @@ void setup_wifi() {
         ESP.restart();
     } else {
         tft.fillScreen(COLOR_BG);
-        // Copy the configuration
-        Configuration new_config(config);
         // Set the new values
-        new_config.set_number_lines(String(param_count.getValue()).toInt());
-        new_config.set_lines_filter(param_filter.getValue());
-        new_config.set_stop_id(param_rbl.getValue());
-        new_config.set_eco_mode(String(param_eco.getValue()).toInt());
-
-        if (config != new_config) {
-            // Save the configuration to EEPROM
-            new_config.save_file(JSON_CONFIG_FILE);
-            // Assign new values to global config
-            config = new_config;
-        }
+        config.set_number_lines(String(param_count.getValue()).toInt());
+        config.set_lines_filter(param_filter.getValue());
+        config.set_stop_id(param_rbl.getValue());
+        config.set_eco_mode(String(param_eco.getValue()).toInt());
     }
 }
 
@@ -250,7 +230,7 @@ void action_reset(Configuration& config, unsigned long time_pressed){
         wifi_manager.resetSettings();
         ESP.restart();
     } else if (time_pressed >= config.settings.hard_reset_time){
-        config.delete_file(JSON_CONFIG_FILE);
+        config.clear();
         wifi_manager.resetSettings();
         ESP.restart();
     }
@@ -261,19 +241,15 @@ void action_dim(Configuration& config){
     if (25.0 < brightness && brightness <= 100.0) {
         brightness -= 25.0;
         config.set_brightness(brightness);
-        config.save_file(JSON_CONFIG_FILE);
         pm.backlight_dim(brightness, 300);
     } else if (brightness == 25.0 || brightness == 0.0) {
         brightness = 100.0;
         config.set_brightness(brightness);
-        config.save_file(JSON_CONFIG_FILE);
         pm.backlight_dim(brightness, 300);
     }
 }
 
 void action_eco_mode(Configuration& config, unsigned long time_pressed){
-    Serial.printf("Eco Mode: %d", config.get_eco_mode());
-    Serial.printf("Eco State: %d", config.get_eco_mode_state());
     if (time_pressed >= 1000) {
         if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE){
             switch (config.get_eco_mode_state())
@@ -302,7 +278,6 @@ void action_switch_layout(Configuration& config){
     } else {
         config.set_number_lines(num_lines + 1);
     }
-    config.save_file(JSON_CONFIG_FILE);
 }
 
 /* Eco Mode State Transitions Functions */
@@ -312,13 +287,11 @@ void activate_eco_mode() {
     if (!pm.is_eco_active()) {
         config.set_eco_mode_state(ECO_ON);
     }
-    config.save_file(JSON_CONFIG_FILE);
 }
 
 void deactivate_eco_mode() {
     pm.eco_mode_off();
     config.set_eco_mode_state(ECO_OFF);
-    config.save_file(JSON_CONFIG_FILE);
 }
 
 /**
@@ -331,14 +304,8 @@ void setup() {
     Serial.println("Turning Bluetooth OFF...");
     pm.bluetooth_stop();
 
-    Serial.println("Init SPI Flash File System...");
-    if (!SPIFFS.begin(true)) {
-        Serial.println("An error occurred while mounting SPIFFS");
-        delay(config.settings.error_reset_delay);
-        ESP.restart();  // Restart the ESP32
-    }
-    // Loading config
-    config.load_file(JSON_CONFIG_FILE);
+    //Loading the config
+    config.load();
 
     Serial.println("Init TFT...");
     double brightness = config.get_brightness();

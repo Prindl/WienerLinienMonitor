@@ -33,7 +33,6 @@ void Button::handle_presses() {
                 // Wait for release OR for long press threshold
                 while (this->is_pressed()) {
                     if (millis() - press_start > TIMEOUT_LONG_PRESS) {
-                        Serial.println("Long Press");
                         // Wait for user to let go so we don't trigger again
                         while(this->is_pressed()) vTaskDelay(10);
                         if (this->config.interrupt_handler_long) {
@@ -51,7 +50,6 @@ void Button::handle_presses() {
                         if (this->config.interrupt_handler_double) {
                             this->config.interrupt_handler_double(remote_cfg);
                         }
-                        Serial.println("Double Press");
                         wait_for_double_press = false;
                     } else {
                         wait_for_double_press = true;
@@ -66,7 +64,6 @@ void Button::handle_presses() {
                 if (this->config.interrupt_handler_short) {
                     this->config.interrupt_handler_short(remote_cfg);
                 }
-                Serial.println("Short Press");
                 wait_for_double_press = false;
             }
         }

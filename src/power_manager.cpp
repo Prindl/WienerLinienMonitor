@@ -130,7 +130,6 @@ void PowerManager::display_on() {
 //   delay(50); // Give the LCD controller time to wake up
 //   tft.begin(); // You usually need to re-init the screen after GPIO 15 was LOW
     // _tft.writecommand(TFT_SLPOUT);
-    Serial.printf("Truning brightness to: %lf\n", config.get_brightness());
     backlight_on(config.get_brightness());
 }
 

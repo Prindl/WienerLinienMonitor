@@ -143,7 +143,7 @@ void TraficManager::updateScreen() {
         p_screen->DrawCenteredText("No Real-Time information available.");
         return;
     }
-    const int& number_text_lines = config.get_number_lines();
+    const int32_t number_text_lines = config.get_number_lines();
     const int trafic_set_size = static_cast<int>(all_trafic_set.size());
     // Dynamic Row adjustment of screen
     if (trafic_set_size < number_text_lines) {

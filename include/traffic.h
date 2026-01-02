@@ -1,10 +1,6 @@
 #ifndef __TRAFFIC_H__
 #define __TRAFFIC_H__
 
-#include <FS.h>
-#include <map>
-#include <vector>
-
 #include "config.h"
 #include "screen.h"
 

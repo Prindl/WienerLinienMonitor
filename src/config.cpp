@@ -1,184 +1,118 @@
 #include "config.h"
 
-int Configuration::verify_number_lines(int count) {
-    switch (count) {
+Configuration::Configuration() {}
+
+void Configuration::load() {
+    // Load values into ram
+    this->begin(true);
+    this->ram_number_lines = this->db.getInt(PREF_NUM_LINES, DEFAULT_NUMBER_LINES);
+    this->ram_filter_lines = this->db.getString(PREF_FILTER_TRANSPORT);
+    this->ram_stop_id = this->db.getString(PREF_STOP_ID);
+    this->ram_eco_mode = static_cast<EcoMode>(this->db.getInt(PREF_ECO_MODE, ECO_LIGHT));
+    this->ram_eco_state = static_cast<EcoModeState>(this->db.getInt(PREF_ECO_STATE, ECO_OFF));
+    this->ram_brightness = this->db.getDouble(PREF_BRIGHTNESS, 100.0);
+    this->end();
+}
+
+void Configuration::begin(bool read_only) {
+    this->db.begin(NS_SETTINGS, read_only);
+}
+
+void Configuration::end() {
+    this->db.end();
+}
+
+int32_t Configuration::verify_number_lines(int32_t value) {
+    switch (value) {
       case LIMIT_MIN_NUMBER_LINES ... LIMIT_MAX_NUMBER_LINES:
-        return count;
+        return value;
       default:
         return DEFAULT_NUMBER_LINES;
     }
 }
 
-Configuration::Configuration() :
-    number_text_lines(DEFAULT_NUMBER_LINES),
-    eco_mode(ECO_LIGHT),
-    eco_state(ECO_OFF),
-    brightness(100.00)
-{
-
+void Configuration::set_number_lines(int32_t value) {
+    this->ram_number_lines = this->verify_number_lines(value);
+    this->begin();
+    this->db.putInt(PREF_NUM_LINES, this->ram_number_lines);
+    this->end();
 }
 
-Configuration::Configuration(const Configuration& other) :
-    number_text_lines(other.number_text_lines),
-    filter_lines(other.filter_lines),
-    stop_id_lines(other.stop_id_lines),
-    eco_mode(other.eco_mode),
-    eco_state(other.eco_state),
-    brightness(other.brightness)
-{
-
+int32_t Configuration::get_number_lines() {
+    return this->ram_number_lines;
 }
 
-Configuration& Configuration::operator=(const Configuration& other) {
-    this->number_text_lines = other.number_text_lines;
-    this->filter_lines = other.filter_lines;
-    this->stop_id_lines = other.stop_id_lines;
-    this->eco_mode = other.eco_mode;
-    this->eco_state = other.eco_state;
-    this->brightness = other.brightness;
-    return *this;
+void Configuration::set_lines_filter(const String& value) {
+    this->ram_filter_lines = value;
+    this->begin();
+    this->db.putString(PREF_FILTER_TRANSPORT, this->ram_filter_lines);
+    this->end();
 }
 
-bool Configuration::operator==(const Configuration& other) const {
-    if (this == &other) {
-        return true;
-    }
-    return this->number_text_lines == other.number_text_lines
-        && this->filter_lines == other.filter_lines
-        && this->stop_id_lines == other.stop_id_lines
-        && this->eco_mode == other.eco_mode
-        && this->eco_state == other.eco_state
-        && this->brightness == other.brightness;
+const String& Configuration::get_lines_filter() {
+    return this->ram_filter_lines;
 }
 
-bool Configuration::operator!=(const Configuration& other) const {
-    return !(*this == other);
+void Configuration::set_stop_id(const String& value) {
+    this->ram_stop_id = value;
+    this->begin();
+    this->db.putString(PREF_STOP_ID, this->ram_stop_id);
+    this->end();
 }
 
-void Configuration::set_number_lines(int num) {
-    this->number_text_lines = verify_number_lines(num);
+const String& Configuration::get_stop_id() {
+    return this->ram_stop_id;
 }
 
-int Configuration::get_number_lines() const {
-    return this->number_text_lines;
+void Configuration::set_eco_mode(EcoMode value) {
+    this->ram_eco_mode = value;
+    this->begin();
+    this->db.putInt(PREF_ECO_MODE, static_cast<int32_t>(value));
+    this->end();
 }
 
-void Configuration::set_lines_filter(const String& filter) {
-    this->filter_lines = filter;
+void Configuration::set_eco_mode(int32_t value) {
+    this->ram_eco_mode = static_cast<EcoMode>(value);
+    this->begin();
+    this->db.putInt(PREF_ECO_MODE, value);
+    this->end();
 }
 
-const String& Configuration::get_lines_filter() const {
-    return this->filter_lines;
+EcoMode Configuration::get_eco_mode() {
+    return this->ram_eco_mode;
 }
 
-void Configuration::set_stop_id(const String& id) {
-    this->stop_id_lines = id;
+void Configuration::set_eco_mode_state(EcoModeState value) {
+    this->ram_eco_state = value;
+    this->begin();
+    this->db.putInt(PREF_ECO_STATE, static_cast<int32_t>(value));
+    this->end();
 }
 
-const String& Configuration::get_stop_id() const {
-    return this->stop_id_lines;
+void Configuration::set_eco_mode_state(int32_t value) {
+    this->ram_eco_state = static_cast<EcoModeState>(value);
+    this->begin();
+    this->db.putInt(PREF_ECO_STATE, value);
+    this->end();
 }
 
-void Configuration::set_eco_mode(EcoMode mode) {
-    this->eco_mode = mode;
+EcoModeState Configuration::get_eco_mode_state() {
+    return this->ram_eco_state;
 }
 
-void Configuration::set_eco_mode(int mode) {
-    this->eco_mode = static_cast<EcoMode>(mode);
+void Configuration::set_brightness(double value) {
+    this->ram_brightness = value;
+    this->begin();
+    this->db.putDouble(PREF_BRIGHTNESS, value);
+    this->end();
 }
 
-EcoMode Configuration::get_eco_mode() const {
-    return this->eco_mode;
+double Configuration::get_brightness() {
+    return this->ram_brightness;
 }
 
-void Configuration::set_eco_mode_state(EcoModeState state) {
-    this->eco_state = state;
-}
-
-void Configuration::set_eco_mode_state(int state) {
-    this->eco_state = static_cast<EcoModeState>(state);
-}
-
-EcoModeState Configuration::get_eco_mode_state() const {
-    return this->eco_state;
-}
-
-void Configuration::set_brightness(double brightness) {
-    this->brightness = brightness;
-}
-
-double Configuration::get_brightness() const {
-    return this->brightness;
-}
-
-void Configuration::save_file(const char *filename) {
-#ifdef USE_ARDUINOJSON_V7
-    JsonDocument json;
-#else
-    StaticJsonDocument<512> json;
-#endif
-    json[JSON_TAG_NUM_LINES] = this->number_text_lines;
-    json[JSON_TAG_FILTER_TRANSPORT] = this->filter_lines;
-    json[JSON_TAG_STOP_ID] = this->stop_id_lines;
-    json[JSON_TAG_ECO_MODE] = this->eco_mode;
-    json[JSON_TAG_ECO_STATE] = this->eco_state;
-    json[JSON_TAG_BRIGHTNESS] = this->brightness;
-
-    File file_config = SPIFFS.open(filename, "w");
-    if (!file_config) {
-        Serial.printf("Failed to open %s in for writing.\n", filename);
-        return;
-    }
-#ifdef DBG_CONFIGURATION
-    serializeJsonPretty(json, Serial);
-#endif
-    if (serializeJson(json, file_config) == 0) {
-        Serial.printf("Failed to save %s.\n", filename);
-    }
-    file_config.close();
-}
-
-bool Configuration::load_file(const char *filename) {
-    // SPIFFS.format(); // clean FS, for testing
-    if (SPIFFS.exists(filename)) {
-        File file_config = SPIFFS.open(filename, "r");
-        if (!file_config) {
-            Serial.printf("Failed to open %s in for reading.\n", filename);
-            return false;
-        }
-#ifdef USE_ARDUINOJSON_V7
-        JsonDocument json;
-#else
-        StaticJsonDocument<512> json;
-#endif
-        DeserializationError error = deserializeJson(json, file_config);
-#ifdef DBG_CONFIGURATION
-        serializeJsonPretty(json, Serial);
-#endif
-        if (!error) {
-            this->number_text_lines = json[JSON_TAG_NUM_LINES].as<int>();
-            this->filter_lines = json[JSON_TAG_FILTER_TRANSPORT].as<String>();
-            this->stop_id_lines = json[JSON_TAG_STOP_ID].as<String>();
-            this->eco_mode = json[JSON_TAG_ECO_MODE].as<EcoMode>();
-            this->eco_state = json[JSON_TAG_ECO_STATE].as<EcoModeState>();
-            this->brightness = json[JSON_TAG_BRIGHTNESS].as<double>();
-            return true;
-        } else {
-            Serial.printf("Failed to load %s: %s\n", filename, error.c_str());
-        }
-        file_config.close();
-    }
-    return false;
-}
-
-void Configuration::delete_file(const char *filename) {
-    if (SPIFFS.exists(filename)) {
-        if (SPIFFS.remove(filename)) {
-            Serial.printf("File %s successfully deleted.\n", filename);
-        } else {
-            Serial.printf("Failed to delete %s.\n", filename);
-        }
-    } else {
-        Serial.printf("File %s doe snot exist.\n", filename);
-    }
+void Configuration::clear() {
+    this->begin();
+    this->db.clear();
+    this->end();
 }

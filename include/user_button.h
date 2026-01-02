@@ -1,8 +1,6 @@
 #ifndef __USER_BUTTON_H__
 #define __USER_BUTTON_H__
 
-#include <Arduino.h>
-
 #include "config.h"
 
 #define TIMEOUT_LONG_PRESS (800)

@@ -1,27 +1,22 @@
 #ifndef __CFG_H__
 #define __CFG_H__
 
-#include <ArduinoJson.h>  // by Benoit Blanchon 6.21.3
-#include <SPIFFS.h>
-
-#define JSON_CONFIG_FILE "/configuration.json"
-#define USE_ARDUINOJSON_V7
+#include <Preferences.h>
 
 #define TEXT_ROWS_PER_MONITOR 2
 
 #define DEFAULT_NUMBER_LINES (2)
 #define LIMIT_MIN_NUMBER_LINES (1)
-#define LIMIT_MAX_NUMBER_LINES (3) 
+#define LIMIT_MAX_NUMBER_LINES (3)
 
-#define JSON_TAG_NUM_LINES ("NUMBER_TEXT_LINES")
-#define JSON_TAG_FILTER_TRANSPORT ("FILTER_TRANSPORT")
-#define JSON_TAG_STOP_ID ("STOP_ID")
-#define JSON_TAG_ECO_MODE ("ECO_MODE")
-#define JSON_TAG_ECO_STATE ("ECO_STATE")
-#define JSON_TAG_BRIGHTNESS ("BRIGHTNESS")
+#define PREF_NUM_LINES ("SCREEN_LINES")
+#define PREF_FILTER_TRANSPORT ("FILTER")
+#define PREF_STOP_ID ("STOP_ID")
+#define PREF_ECO_MODE ("ECO_MODE")
+#define PREF_ECO_STATE ("ECO_STATE")
+#define PREF_BRIGHTNESS ("BRIGHTNESS")
 
-#define DBG_CONFIGURATION
-#undef DBG_CONFIGURATION
+#define NS_SETTINGS ("Settings")
 
 enum EcoMode {
    NO_ECO = 0,
@@ -66,60 +61,47 @@ struct Settings {
 
 class Configuration {
     private:
-        ///< The number of lines of text that can be displayed in each idx_row.
-        int number_text_lines;
+        Preferences db;
+        int32_t ram_number_lines;
+        String ram_filter_lines;
+        String ram_stop_id;
+        EcoMode ram_eco_mode;
+        EcoModeState ram_eco_state;
+        double ram_brightness;
 
-        ///< The raw lines filter. Example "D,2,6".
-        String filter_lines;
-
-        ///< The lines RBL.
-        String stop_id_lines;
-
-        // The power saving mode used
-        EcoMode eco_mode;
-
-        // The state of the eco mode
-        EcoModeState eco_state;
-
-        // The screens brightness
-        double brightness;
-
-        static int verify_number_lines(int count);
+        static int32_t verify_number_lines(int32_t count);
 
     public:
         static struct Settings settings;
 
         explicit Configuration();
-        Configuration(const Configuration& other);
 
-        Configuration& operator=(const Configuration& other);
-        bool operator==(const Configuration& other) const;
-        bool operator!=(const Configuration& other) const;
+        void set_number_lines(int32_t value);
+        int32_t get_number_lines();
 
-        void set_number_lines(int num);
-        int get_number_lines() const;
+        void set_lines_filter(const String& value);
+        const String& get_lines_filter();
 
-        void set_lines_filter(const String& filter);
-        const String& get_lines_filter() const;
+        void set_stop_id(const String& value);
+        const String& get_stop_id();
 
-        void set_stop_id(const String& id);
-        const String& get_stop_id() const;
+        void set_eco_mode(EcoMode value);
+        void set_eco_mode(int32_t value);
+        EcoMode get_eco_mode();
 
-        void set_eco_mode(EcoMode mode);
-        void set_eco_mode(int mode);
-        EcoMode get_eco_mode() const;
+        void set_eco_mode_state(EcoModeState value);
+        void set_eco_mode_state(int32_t value);
+        EcoModeState get_eco_mode_state();
 
-        void set_eco_mode_state(EcoModeState state);
-        void set_eco_mode_state(int state);
-        EcoModeState get_eco_mode_state() const;
+        void set_brightness(double value);
+        double get_brightness();
 
-        void set_brightness(double brightness);
-        double get_brightness() const;
+        void begin(bool read_only = false);
+        void end();
 
-        void save_file(const char *filename);
-        bool load_file(const char *filename);
+        void clear();
+        void load();
 
-        static void delete_file(const char *filename);
 };
 
 #endif // __CFG_H__
