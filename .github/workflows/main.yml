@@ -1,37 +1,42 @@
-name: Build Arduino Sketch
+name: PlatformIO Build
 
-on: push
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # We use the `arduino/setup-arduino-cli` action to install and
-      # configure the Arduino CLI on the system.
-      - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v1
-     # - name: Install Arduino CLI
-     #   run: |
-     #     curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
-     #   shell: bash
-
-      - name: Install required libraries
-        run: |
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "TFT_eSPI"
-          arduino-cli lib install "WiFiManager"
-        shell: bash
-        
-      - uses: arduino/compile-sketches@v1
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
-          fqbn: "esp32:esp32:tinypico"
-          platforms: |
-            - name: esp32:esp32
-              source-url: https://dl.espressif.com/dl/package_esp32_index.json
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-          sketch-paths: |
-            - sketch
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade platformio
+
+      - name: Run PlatformIO Build
+        run: pio run
