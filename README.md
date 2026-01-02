@@ -1,3 +1,4 @@
+[![PlatformIO Build](https://github.com/Prindl/WienerLinienMonitor/actions/workflows/main.yml/badge.svg)](https://github.com/Prindl/WienerLinienMonitor/actions/workflows/main.yml)
 # Wiener Linien ESP32-S3 Public Transport Departure Monitor
 
 This repository is a reworked version of the [original one by coppermilk](https://github.com/coppermilk/wiener_linien_esp32_monitor).
