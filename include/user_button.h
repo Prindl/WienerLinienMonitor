@@ -6,12 +6,6 @@
 #define TIMEOUT_LONG_PRESS (800)
 #define TIMEOUT_SHORT_PRESS (250)
 
-enum ButtonTransition {
-    TR_NONE = -1,
-    TR_PRESSED = 0,
-    TR_RELEASED = 1
-};
-
 struct ButtonTaskConfig {
     uint8_t pin;
     Configuration* config;
@@ -22,29 +16,26 @@ struct ButtonTaskConfig {
     void (*interrupt_handler_double)(Configuration& config);
 };
 
-class Button {
-    public:
-        uint8_t state;
-
-        Button(ButtonTaskConfig& config, uint8_t mode = INPUT_PULLUP);
-
-        bool is_pressed();
-        
-        int read();
-
-        void handle_presses();
-
-    private:
-        uint8_t pin;
-        ButtonTaskConfig& config;
-};
-
 extern ButtonTaskConfig button_1_cfg;
 extern ButtonTaskConfig button_2_cfg;
 
 void IRAM_ATTR handle_button_1_interrupt();
 void IRAM_ATTR handle_button_2_interrupt();
 
-void ButtonTask(void* pvParameters);
+class Button {
+    public:
+        Button(ButtonTaskConfig config, uint8_t mode = INPUT_PULLUP);
+
+        int read();
+
+        bool is_pressed();
+
+        void handle_presses();
+
+        static void action(void* pvParameters);
+
+    private:
+        ButtonTaskConfig config;
+};
 
 #endif//__USER_BUTTON_H__

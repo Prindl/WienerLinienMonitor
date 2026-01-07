@@ -14,19 +14,33 @@ private:
      * @brief The prompt for finding RBL/Stop ID.
      */
    const static constexpr char* RBLPrompt =
-    "Find your RBL on <a href='https://till.mabe.at/rbl/' target='_blank' title='RBL/StopId Search'>https://till.mabe.at/rbl/</a>. Multiple RBLs can be combined by comma-separating them:"
+   "Wiener Linien RBL:"
+    "<br>Find your RBL on <a href='https://till.mabe.at/rbl/' target='_blank' title='RBL Search'>https://till.mabe.at/rbl/</a>. Multiple RBLs can be combined by comma-separating them:"
     "<br>Example Single: \"49\""
-    "<br>Example Multiple: \"1354,4202\".<br><br><b>RBL/Stop ID:</b>";
+    "<br>Example Multiple: \"1354,4202\".<br><br><b>RBL:</b>";
+
+    const static constexpr char* EVAPrompt =
+    "OEBB EVA:"
+    "<br>Find your EVA/IBNR on <a href='https://www.michaeldittrich.de/ibnr/online.php' target='_blank' title='EVA/IBNR Search'>https://www.michaeldittrich.de/ibnr/online.php</a>."
+    "<br>Example: \"810027\""
+    "<br><br><b>EVA:</b>";
 
    /**
      * @brief The prompt for filtering lines.
      */
-   const static constexpr char* LineFilterPrompt =
+   const static constexpr char* RBLFilterPrompt =
     "<i>Optional.</i>"
     "Filter the lines to show by comma-separating the line numbers."
     "If empty, all directions will be shown.<br>"
     "Example: \"D,2,U2Z,43\".<br><br>"
-    "<b>Filter lines:</b>";
+    "<b>Filter RBL:</b>";
+
+   const static constexpr char* EVAFilterPrompt =
+    "<i>Optional.</i>"
+    "Filter the lines to show by comma-separating the line numbers."
+    "If empty, all directions will be shown.<br>"
+    "Example: \"S45,S3\".<br><br>"
+    "<b>Filter EVA:</b>";
 
    const static constexpr char* EcoPrompt = 
       "Select the Power Saving Mode. Can be enabled manually via short click on reset button or automatically if no data is received for 5 minutes (a stop with no nightline)."
@@ -54,11 +68,15 @@ private:
      */
   static String GetRBLPrompt();
 
+  static String GetEVAPrompt();
+
   /**
      * @brief Get the line filter prompt.
      * @return The line filter prompt.
      */
-   static String GetLineFilterPrompt();
+   static String GetRBLFilterPrompt();
+
+   static String GetEVAFilterPrompt();
    
    static String GetPowerModePrompt();
 

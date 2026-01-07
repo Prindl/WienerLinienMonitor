@@ -1,6 +1,8 @@
+#include "screen.h"
 #include "wiener_linien.h"
 
-String FixJsonMistake(String word) {
+
+String WLDeparture::fix_json(String word) {
     word = Screen::ConvertGermanToLatin(word);
     // Check if the input string contains spaces
     word.trim();
@@ -13,64 +15,81 @@ String FixJsonMistake(String word) {
   return word;
 }
 
-Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, const String& stop_name) {
-    for (auto& m : monitors) {
-        if (m.line == line_name && m.stop == stop_name) {
-            return &m;
+void WLDeparture::task_update(void * pvParameters) {
+    WLDeparture* instance = (WLDeparture*)pvParameters;
+    NetworkManager& network = NetworkManager::getInstance();
+    char url[100] = URL_WIENER_LINIEN;
+    const int pos = strlen(url);
+    while(true) {
+        // 1. SLEEP: Wait indefinitely for the Timer to notify this task
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if(network.acquire() == pdTRUE) {
+            HTTPClient https;
+            if (WiFi.status() != WL_CONNECTED) {
+                Serial.println("Couldn't fetch data - WiFi not connected.");
+                network.release();
+                continue;
+            }
+            const String& rbl = config.get_rbl();
+            if(rbl.isEmpty()){
+                Serial.println("Couldn't fetch data - no RBL specified.");
+                network.release();
+                continue;
+            }
+            for(int i=pos; i<pos+rbl.length(); i++){
+                url[i] = rbl[i-pos];
+            }
+            Serial.printf("Fetching: %s\n", url);
+
+            // Start the HTTP request
+            https.begin(url);
+            int http_code = https.GET();
+
+            // Check if the request was successful
+            if (http_code == HTTP_CODE_OK) {
+                // Stream parsing - NO String buffer!
+                // WiFiClient& stream = http.getStream();
+                // For big JSON Stream parsing does not work on ESP32
+                String payload = https.getString();
+                DECLARE_JSON_DOC(root);
+                DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(64));
+                if (error) {
+                    Serial.printf("JSON parsing error: %S\n", error.c_str());
+                    https.end();
+                    delay(config.settings.error_reset_delay);
+                    network.release();
+                    return;
+                }
+                if (xSemaphoreTake(instance->internal_mutex, portMAX_DELAY) == pdTRUE) {
+                    instance->monitors.clear();
+                    instance->fill_monitors_from_json(root);
+                    xSemaphoreGive(instance->internal_mutex);
+                    // Notify data coordinator of data update
+                    if(instance->notification != nullptr){
+                        xTaskNotifyGive(instance->notification);
+                    } else {
+                        Serial.println("Data update notification skipped.");
+                    }
+                }
+                Serial.printf("Merged into %ld monitors.\n", instance->monitors.size());
+            } else {
+                Serial.printf("HTTP Code: %d\n", http_code);
+            }
+            https.end();
+            network.release();
         }
     }
-    return nullptr;
 }
 
-std::vector<Monitor> GetMonitorsFromHttp(const String& rbl_id) {
-    std::vector<Monitor> monitors;
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("Couldn't fetch data - WiFi not connected.");
-        return monitors;
+void WLDeparture::callback_timer_update(TimerHandle_t xTimer) {
+    // 3. Retrieve the 'this' pointer from the Timer ID
+    WLDeparture* instance = (WLDeparture*)pvTimerGetTimerID(xTimer);
+    if (instance != nullptr && instance->handle_task_update != nullptr) {
+        xTaskNotifyGive(instance->handle_task_update);
     }
-    String url = URL_BASE + rbl_id;
-
-    // Print the URL to the serial port
-    Serial.println("Fetching: " + url);
-
-    // Start the HTTP request
-    HTTPClient http;
-    http.begin(url);
-
-    // Get the status code of the response
-    int httpCode = http.GET();
-
-    // Check if the request was successful
-    if (httpCode <= 0) {
-        Serial.printf("HTTP Error: %s\n", http.errorToString(httpCode).c_str());
-    } else if (httpCode == HTTP_CODE_OK) {
-        // Stream parsing - NO String buffer!
-        // WiFiClient& stream = http.getStream();
-        // For big JSON Stream parsing does not work on ESP32
-        String payload = http.getString();
-#ifdef USE_ARDUINOJSON_V7
-        JsonDocument root;
-#else
-        DynamicJsonDocument root(JSON_HEAP_SIZE);
-#endif
-        DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(64));
-        if (error) {
-            Serial.printf("JSON parsing error: %S\n", error.c_str());
-            http.end();
-            delay(config.settings.error_reset_delay);
-            return monitors;
-        }
-        fillMonitorsFromJson(root, monitors);
-        Serial.printf("Merged into %ld monitors.\n", monitors.size());
-
-    } else {
-        Serial.printf("HTTP Code: %d\n", httpCode);
-    }
-    http.end();
-    return monitors;
 }
 
-void fillMonitorsFromJson(JsonDocument& root, std::vector<Monitor>& monitors) {
+void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
     if (root["data"].isNull()) return;
     const JsonObject data = root["data"];
     std::vector<TrafficInfo> traffic_infos;
@@ -103,9 +122,9 @@ void fillMonitorsFromJson(JsonDocument& root, std::vector<Monitor>& monitors) {
             String stop_name = Screen::ConvertGermanToLatin(json_stop["title"].as<String>());
             for (const auto& json_line : json_lines) {
                 String line_name = json_line["name"].as<String>();
-                String line_towards = FixJsonMistake(json_line["towards"].as<String>());
+                String line_towards = fix_json(json_line["towards"].as<String>());
                 bool line_barrierfree = json_line["barrierFree"].as<bool>();
-                Monitor* monitor_p = findMonitor(monitors, line_name, stop_name);
+                Monitor* monitor_p = findMonitor(this->monitors, line_name, stop_name);
                 Monitor monitor;
                 monitor.line = line_name;
                 monitor.stop = stop_name;
@@ -133,7 +152,7 @@ void fillMonitorsFromJson(JsonDocument& root, std::vector<Monitor>& monitors) {
                             const JsonObject json_vehicle = departure["vehicle"];
                             if (!json_vehicle.isNull()) {
                                 vehicle.line = json_vehicle["name"].as<String>();
-                                vehicle.towards = FixJsonMistake(json_vehicle["towards"].as<String>());
+                                vehicle.towards = fix_json(json_vehicle["towards"].as<String>());
                                 vehicle.is_barrier_free = json_vehicle["barrierFree"].as<bool>();
                                 vehicle.has_folding_ramp = json_vehicle["foldingRamp"].as<bool>();
                             } else {
@@ -163,76 +182,53 @@ void fillMonitorsFromJson(JsonDocument& root, std::vector<Monitor>& monitors) {
                 }
                 if (!monitor_p) {
                     // New monitor with linename and stop
-                    monitors.push_back(monitor);
+                    this->monitors.push_back(monitor);
                 }
             }
         }
-
     }
 }
 
-/**
- * @brief Splits a string by a specified separator character.
- * @param data The input string to be split.
- * @param separator The character used for splitting.
- * @return A vector of substrings resulting from the split operation.
- */
-std::vector<String> GetSplittedStrings(String data, char separator) {
-  int separatorIndex = 0;
-  std::vector<String> result;
-
-  while (separatorIndex != -1) {
-    separatorIndex = data.indexOf(separator);
-    String chunk = data.substring(0, separatorIndex);
-    result.push_back(chunk);
-    if (separatorIndex != -1) {
-      data = data.substring(separatorIndex + 1);
-    }
-  }
-
-  return result;
+WLDeparture::WLDeparture() : internal_mutex(nullptr), handle_timer_update(nullptr), handle_task_update(nullptr), notification(nullptr){
 }
 
-/**
- * @brief Filters a vector of Monitor objects based on a filter string.
- * @param data The input vector of Monitor objects.
- * @param filter The filter string to match against Monitor names.
- * @return A vector containing Monitor objects that match the filter.
- */
-std::vector<Monitor> GetFilteredMonitors(const std::vector<Monitor>& data, const String& filter) {
-  if (filter.isEmpty()) {
-    return data;
-  }
-  std::vector<String> filter_entries = GetSplittedStrings(filter, ',');
-  std::vector<Monitor> result;
+void WLDeparture::setup(){
+    this->internal_mutex = xSemaphoreCreateMutex();
+    BaseType_t status = xTaskCreatePinnedToCore(
+        &task_update,
+        "task_update_wl",
+        1024 * 24,
+        this,
+        2,
+        &handle_task_update,
+        APP_CPU_NUM
+    );
+    if(status != pdTRUE){
+        Serial.printf("Could not create update task for WienerLinien: %d\n", status);
+    }
+    this->handle_timer_update = xTimerCreate(
+        "timer_update_wl",
+        pdMS_TO_TICKS(config.settings.data_update_task_delay),
+        pdTRUE,
+        (void*)this,
+        &callback_timer_update
+    );
 
-  for (const auto& monitor : data) {
-      for (const auto& entry : filter_entries) {
+    if (this->handle_timer_update != NULL) {
+        xTimerStart(this->handle_timer_update, 0);
+    }    
+}
 
-          // Trim whitespace (optional, but recommended)
-          String trimmed = entry;
-          trimmed.trim();
+void WLDeparture::set_notification(TaskHandle_t task){
+    this->notification = task;
+}
 
-          // Check if this entry contains '/'
-          int slashIndex = trimmed.indexOf('/');
-
-          if (slashIndex < 0) {
-              // Entry is just "name"
-              if (monitor.line == trimmed) {
-                  result.push_back(monitor);
-                  break;
-              }
-          } else {
-              // Entry is "name/direction"
-              String nameFilter = trimmed.substring(0, slashIndex);
-              String directionFilter = trimmed.substring(slashIndex + 1);
-
-              if (monitor.line == nameFilter && strncmp(monitor.towards.c_str(), directionFilter.c_str(), directionFilter.length()) == 0) {
-                  result.push_back(monitor);
-                  break;
-              }
-          }
-      }
-  }
-  return result;
+void WLDeparture::get_latest_snapshot(std::vector<Monitor>& data){
+    data.clear();
+    // Lock briefly just to copy the internal vector
+    std::vector<Monitor> snapshot;
+    if (xSemaphoreTake(this->internal_mutex, portMAX_DELAY) == pdTRUE) {
+        data.insert(data.end(), this->monitors.begin(), this->monitors.end());
+        xSemaphoreGive(this->internal_mutex);
+    }
 }

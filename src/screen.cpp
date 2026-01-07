@@ -1,16 +1,40 @@
+#include "colors.h"
+#include "power_manager.h"
 #include "screen.h"
 
-Screen::Screen(TFT_eSPI& tft, int cnt_rows, int nLinesInRowCount)
+Screen& Screen::getInstance(){
+    PowerManager& pm = PowerManager::getInstance();
+    static Screen instance(pm.get_tft(), config.get_number_lines());
+    return instance;
+}
+
+
+Screen::Screen(TFT_eSPI& tft, int cnt_rows)
 : _tft(tft),
   px_max_width_name_text(0),
   px_max_width_countdown_text(0),
   px_separate_line_height(3),
   px_margin_lines(2),
-  number_text_lines(nLinesInRowCount),
+  number_text_lines(TEXT_ROWS_PER_MONITOR),
   px_margin(8),
   px_min_text_sprite(std::numeric_limits<int>::max()) {
     SetRowCount(cnt_rows);
+    this->internal_mutex = xSemaphoreCreateMutex();
+    if (this->internal_mutex == NULL) {
+        Serial.println("[ScreenManager] Error: Could not create Mutex!");
+    }
 }
+
+BaseType_t Screen::acquire() {
+    return xSemaphoreTake(this->internal_mutex, portMAX_DELAY);
+}
+
+void Screen::release() {
+    if (this->internal_mutex != NULL) {
+        xSemaphoreGive(this->internal_mutex);
+    }
+}
+
 
 void Screen::SetRowCount(int num_rows){
     if (cnt_rows != num_rows){
@@ -105,14 +129,20 @@ String Screen::ConvertGermanToLatin(String input) {
         if (c == 0xC3) {
             // UTF-8 German umlauts
             char next = input[i + 1];
-            if (next == 0xA4) { output += "ae"; i++; continue; } // ä
-            else if (next == 0x84) { output += "AE"; i++; continue; } // Ä
-            else if (next == 0xB6) { output += "oe"; i++; continue; } // ö
-            else if (next == 0x96) { output += "OE"; i++; continue; } // Ö
-            else if (next == 0xBC) { output += "ue"; i++; continue; } // ü
-            else if (next == 0x9C) { output += "UE"; i++; continue; } // Ü
-            else if (next == 0x9F) { output += "ss"; i++; continue; } // ß
-            else { output += c; continue; }
+            if (next == 0xA4) { output += "ae"; i++; } // ä
+            else if (next == 0x84) { output += "AE"; i++; } // Ä
+            else if (next == 0xB6) { output += "oe"; i++; } // ö
+            else if (next == 0x96) { output += "OE"; i++; } // Ö
+            else if (next == 0xBC) { output += "ue"; i++; } // ü
+            else if (next == 0x9C) { output += "UE"; i++; } // Ü
+            else if (next == 0x9F) { output += "ss"; i++; } // ß
+            else { output += c; }
+            continue;
+        } else if(c == 0xC2) {
+            char next = input[i + 1];
+            if (next == 0xA0) { output += " "; i++; } // HTML Non Breaking Space
+            else { output += c; }
+            continue;
         }
         output += c;
     }
@@ -162,7 +192,7 @@ void Screen::DrawCenteredText(const String& text){
     }
 
     // Draw text on the sprite
-    sprite.setTextColor(COLOR_TEXT);
+    sprite.setTextColor(COLOR_TEXT_YELLOW);
     sprite.fillSprite(COLOR_BG);
     sprite.setFreeFont(p_font);
     sprite.drawString(text.c_str(), vec_scroll_cord[0], 0);
@@ -349,13 +379,13 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
         }
 
         // Draw text on the sprite
-        sprite.setTextColor(COLOR_TEXT);
+        sprite.setTextColor(COLOR_TEXT_YELLOW);
         sprite.fillSprite(COLOR_BG);
         sprite.setFreeFont(p_font);
         sprite.drawString(vec_text_lines[i].c_str(), vec_scroll_cord[i], 0);
 
         if (draw_wheelchair) {
-            drawWheelchairIcon(sprite, px_full_string - px_height_font + vec_scroll_cord[i], i*px_height_font, px_height_font, COLOR_TEXT, has_folding_ramp);
+            drawWheelchairIcon(sprite, px_full_string - px_height_font + vec_scroll_cord[i], i*px_height_font, px_height_font, COLOR_TEXT_YELLOW, has_folding_ramp);
         }
 
         // Push sprite to display
@@ -414,7 +444,7 @@ void Screen::DrawTextOnSprite(const String& text, int idx_row, int x, int y, con
     } else {
         sprite.createSprite(px_width_sprite, px_height_font);
         sprite.fillSprite(color_middle);
-        sprite.setTextColor(COLOR_TEXT);
+        sprite.setTextColor(COLOR_TEXT_YELLOW);
         sprite.setFreeFont(p_font);
         sprite.drawString(text, 0, 0);
     }
@@ -439,7 +469,7 @@ void Screen::DrawTextOnSprite(const String& text, int idx_row, int x, int y, con
     // Create and display text sprite
     /*sprite.createSprite(px_width_sprite, px_height_font);
             sprite.fillSprite(color_middle);
-            sprite.setTextColor(COLOR_TEXT);
+            sprite.setTextColor(COLOR_TEXT_YELLOW);
             sprite.setFreeFont(p_font);
             sprite.drawString(text, 0, 0);*/
     sprite.pushSprite(x, y + dy + (px_height_full * idx_row));

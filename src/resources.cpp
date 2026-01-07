@@ -15,8 +15,16 @@ String StringDatabase::GetRBLPrompt() {
   return String(RBLPrompt);
 }
 
-String StringDatabase::GetLineFilterPrompt() {
-  return String(LineFilterPrompt);
+String StringDatabase::GetEVAPrompt() {
+  return String(EVAPrompt);
+}
+
+String StringDatabase::GetRBLFilterPrompt() {
+  return String(RBLFilterPrompt);
+}
+
+String StringDatabase::GetEVAFilterPrompt() {
+  return String(EVAFilterPrompt);
 }
 
 String StringDatabase::GetPowerModePrompt() {

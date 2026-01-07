@@ -1,4 +1,86 @@
+#include "screen.h"
 #include "traffic.h"
+
+TraficManager& TraficManager::getInstance() {
+    static TraficManager instance;
+    return instance;
+}
+
+TraficManager::TraficManager(): shift_cnt(0), countdown_idx(0), p_trafic_clock(nullptr) {
+    this->internal_mutex = xSemaphoreCreateMutex();
+    if (this->internal_mutex == NULL) {
+        Serial.println("FATAL: Could not create TraficManager Mutex");
+    }
+}
+
+Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, const String& stop_name) {
+    for (auto& m : monitors) {
+        if (m.line == line_name && m.stop == stop_name) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+
+/**
+ * @brief Splits a string by a specified separator character.
+ * @param data The input string to be split.
+ * @param separator The character used for splitting.
+ * @return A vector of substrings resulting from the split operation.
+ */
+std::vector<String> GetSplittedStrings(String data, char separator) {
+    int separatorIndex = 0;
+    std::vector<String> result;
+
+    while (separatorIndex != -1) {
+        separatorIndex = data.indexOf(separator);
+        String chunk = data.substring(0, separatorIndex);
+        result.push_back(chunk);
+        if (separatorIndex != -1) {
+            data = data.substring(separatorIndex + 1);
+        }
+    }
+
+    return result;
+}
+
+std::vector<Monitor> GetFilteredMonitors(const std::vector<Monitor>& data, const String& filter) {
+    if (filter.isEmpty()) {
+        return data;
+    }
+    std::vector<String> filter_entries = GetSplittedStrings(filter, ',');
+    std::vector<Monitor> result;
+
+    for (const auto& monitor : data) {
+        for (const auto& entry : filter_entries) {
+
+            // Trim whitespace (optional, but recommended)
+            String trimmed = entry;
+            trimmed.trim();
+
+            // Check if this entry contains '/'
+            int slashIndex = trimmed.indexOf('/');
+
+            if (slashIndex < 0) {
+                // Entry is just "name"
+                if (monitor.line == trimmed) {
+                    result.push_back(monitor);
+                    break;
+                }
+            } else {
+                // Entry is "name/direction"
+                String nameFilter = trimmed.substring(0, slashIndex);
+                String directionFilter = trimmed.substring(slashIndex + 1);
+
+                if (monitor.line == nameFilter && strncmp(monitor.towards.c_str(), directionFilter.c_str(), directionFilter.length()) == 0) {
+                    result.push_back(monitor);
+                    break;
+                }
+            }
+        }
+    }
+    return result;
+}
 
 TrafficClock::TrafficClock(long ms_perCountdown, long cd_perIterations, long it_perHour)
     : kMillisecondsPerCountdown(ms_perCountdown),
@@ -84,18 +166,19 @@ void TraficManager::deleteClock() {
 }
 
 void TraficManager::createClock() {
+    Screen& screen = Screen::getInstance();
     const int& cnt_countdows = config.settings.number_countdowns;
     double f_size;
     if (all_trafic_set.size() == 1) {
-        if (all_trafic_set[0].vehicles.size() > 2*p_screen->GetNumberRows()) {
-            f_size = 2*p_screen->GetNumberRows();
+        if (all_trafic_set[0].vehicles.size() > 2*screen.GetNumberRows()) {
+            f_size = 2*screen.GetNumberRows();
         } else {
             f_size = static_cast<double>(all_trafic_set[0].vehicles.size());
         }
     } else {
         f_size = static_cast<double>(all_trafic_set.size());
     }
-    double f_sceen_cells = static_cast<double>(p_screen->GetNumberRows());
+    double f_sceen_cells = static_cast<double>(screen.GetNumberRows());
 
     long iterations_cnt = static_cast<long>(ceil(f_size / f_sceen_cells));
 
@@ -109,13 +192,21 @@ void TraficManager::createClock() {
 
 }
 
+BaseType_t TraficManager::acquire(){
+    return xSemaphoreTake(this->internal_mutex, portMAX_DELAY);
+}
+
+void TraficManager::release(){
+    xSemaphoreGive(this->internal_mutex);
+}
+
 bool TraficManager::has_data() {
   return !all_trafic_set.empty();
 }
 
 // Block 1: Update Traffic Data
 void TraficManager::update(const std::vector<Monitor>& vec) {
-    //shift_cnt = 0;
+    Screen& screen = Screen::getInstance();
     prev_iterations = 0;
     if (vec.size() > 0){
         Serial.printf("Updating data with %d monitors:\n", vec.size());
@@ -127,7 +218,7 @@ void TraficManager::update(const std::vector<Monitor>& vec) {
         const int trafic_set_size = static_cast<int>(vec.size());
         if (hasClock()) p_trafic_clock->Reset();
 
-        int rows_in_screen_cnt = std::min(p_screen->GetNumberRows(), trafic_set_size);
+        int rows_in_screen_cnt = std::min(screen.GetNumberRows(), trafic_set_size);
         auto currentTraficSubset = cyclicSubset(all_trafic_set, rows_in_screen_cnt, shift_cnt);
         auto futureTraficSubset = cyclicSubset(vec, rows_in_screen_cnt, shift_cnt);
 
@@ -139,8 +230,9 @@ void TraficManager::update(const std::vector<Monitor>& vec) {
 }
 
 void TraficManager::updateScreen() {
+    Screen& screen = Screen::getInstance();
     if (all_trafic_set.empty()) {
-        p_screen->DrawCenteredText("No Real-Time information available.");
+        screen.DrawCenteredText("No Real-Time information available.");
         return;
     }
     const int32_t number_text_lines = config.get_number_lines();
@@ -149,21 +241,21 @@ void TraficManager::updateScreen() {
     if (trafic_set_size < number_text_lines) {
         if (trafic_set_size == 1) {
             if (all_trafic_set[0].vehicles.size() < number_text_lines) {
-                p_screen->SetRowCount(all_trafic_set[0].vehicles.size());
+                screen.SetRowCount(all_trafic_set[0].vehicles.size());
                 // deleteClock();
             } else {
-                p_screen->SetRowCount(number_text_lines);
+                screen.SetRowCount(number_text_lines);
                 // deleteClock();
             }
         } else {
-            p_screen->SetRowCount(trafic_set_size);
+            screen.SetRowCount(trafic_set_size);
             // deleteClock();
         }
     } else {
-        p_screen->SetRowCount(number_text_lines);
+        screen.SetRowCount(number_text_lines);
         // deleteClock();
     }
-    const int cnt_screen_rows = p_screen->GetNumberRows();
+    const int cnt_screen_rows = screen.GetNumberRows();
     int rows_in_screen_cnt = std::min(cnt_screen_rows, trafic_set_size);
     auto currentTraficSubset = cyclicSubset(all_trafic_set, rows_in_screen_cnt, shift_cnt);
 
@@ -181,13 +273,14 @@ void TraficManager::updateScreen() {
             sortTrafic(futureSubset);
             SelectiveReset(currentTraficSubset, futureSubset);
             shift_cnt += cnt_screen_rows;
-      }
-      DrawTraficOnScreen(currentTraficSubset);
+    }
+    DrawTraficOnScreen(currentTraficSubset);
     }
 }
 
 void TraficManager::SelectiveReset(const std::vector<Monitor>& currentTraficSubset, const std::vector<Monitor>& futureSubset) {
-    // p_screen->PrintCordDebug();
+    Screen& screen = Screen::getInstance();
+    // screen.PrintCordDebug();
     if (currentTraficSubset.size() == futureSubset.size()) {
 
       size_t size = futureSubset.size();
@@ -202,11 +295,11 @@ void TraficManager::SelectiveReset(const std::vector<Monitor>& currentTraficSubs
 
       // update only for difrent names
       if (currentTraficSubset.size() > 1) {
-        p_screen->SelectiveResetScroll(isNeedReset);
+        screen.SelectiveResetScroll(isNeedReset);
       }
     }
 
-    // p_screen->PrintCordDebug();
+    // screen.PrintCordDebug();
 }
 
 void TraficManager::sortTrafic(std::vector<Monitor>& v) {
@@ -228,11 +321,12 @@ String TraficManager::GetValidCountdown(const std::vector<Vehicle>& c, size_t in
 }
 
 void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTrafficSubset) {
+    Screen& screen = Screen::getInstance();
     if (currentTrafficSubset.empty()) {
-        p_screen->DrawCenteredText("No Real-Time information available.");
+        screen.DrawCenteredText("No Real-Time information available.");
     } else {
         // Get the number of lines to display
-        size_t numLines = p_screen->GetNumberRows();
+        size_t numLines = screen.GetNumberRows();
 
         // Iterate through each line on the screen
         std::vector<ScreenEntity> vec_screen_entity;
@@ -255,7 +349,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
                 const Monitor& currentMonitor = currentTrafficSubset[0];
                 const auto& vehicles = currentMonitor.vehicles;
                 int vehicle_idx;
-                if (p_screen->GetNumberRows() == vehicles.size()) {
+                if (screen.GetNumberRows() == vehicles.size()) {
                     //Ignore countdown index because all data is displayed on one page
                     vehicle_idx = i;
                 } else {
@@ -360,6 +454,6 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
             vec_screen_entity.push_back(monitor);
         }
         // render entity
-        p_screen->SetRows(vec_screen_entity);
+        screen.SetRows(vec_screen_entity);
     }
 }

@@ -6,11 +6,19 @@ void Configuration::load() {
     // Load values into ram
     this->begin(true);
     this->ram_number_lines = this->db.getInt(PREF_NUM_LINES, DEFAULT_NUMBER_LINES);
-    this->ram_filter_lines = this->db.getString(PREF_FILTER_TRANSPORT);
-    this->ram_stop_id = this->db.getString(PREF_STOP_ID);
+    this->ram_rbl_filter = this->db.getString(PREF_RBL_FILTER);
+    this->ram_rbl = this->db.getString(PREF_RBL);
+    this->ram_rbl_filter = this->db.getString(PREF_EVA_FILTER);
+    this->ram_eva = this->db.getString(PREF_EVA);
     this->ram_eco_mode = static_cast<EcoMode>(this->db.getInt(PREF_ECO_MODE, ECO_LIGHT));
     this->ram_eco_state = static_cast<EcoModeState>(this->db.getInt(PREF_ECO_STATE, ECO_OFF));
     this->ram_brightness = this->db.getDouble(PREF_BRIGHTNESS, 100.0);
+    this->end();
+}
+
+void Configuration::clear() {
+    this->begin();
+    this->db.clear();
     this->end();
 }
 
@@ -42,26 +50,48 @@ int32_t Configuration::get_number_lines() {
     return this->ram_number_lines;
 }
 
-void Configuration::set_lines_filter(const String& value) {
-    this->ram_filter_lines = value;
+void Configuration::set_rbl_filter(const String& value) {
+    this->ram_rbl_filter = value;
     this->begin();
-    this->db.putString(PREF_FILTER_TRANSPORT, this->ram_filter_lines);
+    this->db.putString(PREF_RBL_FILTER, this->ram_rbl_filter);
     this->end();
 }
 
-const String& Configuration::get_lines_filter() {
-    return this->ram_filter_lines;
+const String& Configuration::get_rbl_filter() {
+    return this->ram_rbl_filter;
 }
 
-void Configuration::set_stop_id(const String& value) {
-    this->ram_stop_id = value;
+void Configuration::set_eva_filter(const String& value) {
+    this->ram_eva_filter = value;
     this->begin();
-    this->db.putString(PREF_STOP_ID, this->ram_stop_id);
+    this->db.putString(PREF_RBL_FILTER, this->ram_eva_filter);
     this->end();
 }
 
-const String& Configuration::get_stop_id() {
-    return this->ram_stop_id;
+const String& Configuration::get_eva_filter() {
+    return this->ram_eva_filter;
+}
+
+void Configuration::set_rbl(const String& value) {
+    this->ram_rbl = value;
+    this->begin();
+    this->db.putString(PREF_RBL, this->ram_rbl);
+    this->end();
+}
+
+const String& Configuration::get_rbl() {
+    return this->ram_rbl;
+}
+
+void Configuration::set_eva(const String& value) {
+    this->ram_eva = value;
+    this->begin();
+    this->db.putString(PREF_EVA, this->ram_eva);
+    this->end();
+}
+
+const String& Configuration::get_eva() {
+    return this->ram_eva;
 }
 
 void Configuration::set_eco_mode(EcoMode value) {
@@ -109,10 +139,4 @@ void Configuration::set_brightness(double value) {
 
 double Configuration::get_brightness() {
     return this->ram_brightness;
-}
-
-void Configuration::clear() {
-    this->begin();
-    this->db.clear();
-    this->end();
 }

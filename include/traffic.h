@@ -1,11 +1,11 @@
 #ifndef __TRAFFIC_H__
 #define __TRAFFIC_H__
 
+#include <map>
+
 #include "config.h"
-#include "screen.h"
 
 extern Configuration config;
-extern Screen* p_screen;
 
 template<typename T> std::vector<T> cyclicSubset(const std::vector<T>& input, size_t N, size_t start);
 
@@ -32,7 +32,15 @@ struct TrafficInfo {
     }
 
     String GetFullString() const {
-        return title + " - " + description;
+        if (title.length() && description.length()){
+            return title + " - " + description;
+        } else if (title.length()){
+            return title;
+        } else if (description.length()){
+            return description;
+        } else {
+            return "";
+        }
     }
 
 };
@@ -81,6 +89,7 @@ class TrafficClock {
 class TraficManager {
     private:
         std::vector<Monitor> all_trafic_set;
+        SemaphoreHandle_t internal_mutex;
         int shift_cnt;
         int countdown_idx;
         // unsigned long previousMillisTraficSet;
@@ -89,14 +98,21 @@ class TraficManager {
         TrafficClock* p_trafic_clock;
         long prev_iterations = 0;
 
+        explicit TraficManager();
+        ~TraficManager();
 
     public:
+        static TraficManager& getInstance();
+
+        // Delete copy constructor and assignment operator
+        TraficManager(const TraficManager&) = delete;
+        TraficManager& operator=(const TraficManager&) = delete;
+
         int last_min_size = -1;  // Initialize last_min_size to an invalid value
         std::map<String, std::vector<String>> SplittedStringCache;
 
-        TraficManager(): shift_cnt(0), countdown_idx(0), p_trafic_clock(nullptr) {}
-
-        ~TraficManager();
+        BaseType_t acquire();
+        void release();
 
         bool hasClock();
 
@@ -126,5 +142,9 @@ class TraficManager {
 
         std::vector<String> splitToString(const String& input);
 };
+
+Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, const String& stop_name);
+
+std::vector<Monitor> GetFilteredMonitors(const std::vector<Monitor>& data, const String& filter);
 
 #endif//__TRAFFIC_H__

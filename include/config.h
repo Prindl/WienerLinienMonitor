@@ -10,8 +10,10 @@
 #define LIMIT_MAX_NUMBER_LINES (3)
 
 #define PREF_NUM_LINES ("SCREEN_LINES")
-#define PREF_FILTER_TRANSPORT ("FILTER")
-#define PREF_STOP_ID ("STOP_ID")
+#define PREF_RBL_FILTER ("RBL_FILTER")
+#define PREF_RBL ("STOP_ID")
+#define PREF_EVA_FILTER ("EVA_FILTER")
+#define PREF_EVA ("EVA_NR")
 #define PREF_ECO_MODE ("ECO_MODE")
 #define PREF_ECO_STATE ("ECO_STATE")
 #define PREF_BRIGHTNESS ("BRIGHTNESS")
@@ -41,7 +43,7 @@ struct Settings {
   // Number of milliseconds to delay before resetting the device if an error.
   static constexpr int error_reset_delay = 10 * 1000;
   // Number of milliseconds to reset esp.
-  static constexpr int ms_reboot_interval = 24 * 60 * 60 * 1000;
+  static constexpr uint64_t ms_reboot_interval = 24 * 60 * 60 * 1000;
   // Number of milliseconds to delay between checking the reset button state.
   static constexpr int button_task_delay = 100;
   // Number of milliseconds to delay between updating the data.
@@ -63,8 +65,13 @@ class Configuration {
     private:
         Preferences db;
         int32_t ram_number_lines;
-        String ram_filter_lines;
-        String ram_stop_id;
+        /* Wiener Linien Configuration */
+        String ram_rbl_filter;
+        String ram_rbl;
+        /* OEBB Configuration */
+        String ram_eva_filter;
+        String ram_eva;
+        /* Power Mode Configuration */
         EcoMode ram_eco_mode;
         EcoModeState ram_eco_state;
         double ram_brightness;
@@ -73,17 +80,29 @@ class Configuration {
 
     public:
         static struct Settings settings;
-
+        
         explicit Configuration();
+        
+        void load();
+        void clear();
+
+        void begin(bool read_only = false);
+        void end();
 
         void set_number_lines(int32_t value);
         int32_t get_number_lines();
 
-        void set_lines_filter(const String& value);
-        const String& get_lines_filter();
+        void set_rbl_filter(const String& value);
+        const String& get_rbl_filter();
 
-        void set_stop_id(const String& value);
-        const String& get_stop_id();
+        void set_rbl(const String& value);
+        const String& get_rbl();
+
+        void set_eva_filter(const String& value);
+        const String& get_eva_filter();
+
+        void set_eva(const String& value);
+        const String& get_eva();
 
         void set_eco_mode(EcoMode value);
         void set_eco_mode(int32_t value);
@@ -95,13 +114,6 @@ class Configuration {
 
         void set_brightness(double value);
         double get_brightness();
-
-        void begin(bool read_only = false);
-        void end();
-
-        void clear();
-        void load();
-
 };
 
 #endif // __CFG_H__
