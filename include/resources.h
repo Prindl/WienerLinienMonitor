@@ -57,12 +57,6 @@ private:
   static String GetWiFissid();
 
   /**
-     * @brief Get the instructions text.
-     * @return The instructions text.
-     */
-  static String GetInstructionsText();
-
-  /**
      * @brief Get the RBL/Stop ID prompt.
      * @return The RBL/Stop ID prompt.
      */

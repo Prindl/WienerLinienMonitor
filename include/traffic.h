@@ -12,9 +12,12 @@ template<typename T> std::vector<T> cyclicSubset(const std::vector<T>& input, si
 struct Vehicle {
     String line;
     String towards;
+    String remark;
     int countdown;
     bool is_barrier_free;
     bool has_folding_ramp;
+    bool is_canceled;
+    bool is_airport;
 };
 
 struct TrafficInfo {
@@ -144,7 +147,5 @@ class TraficManager {
 };
 
 Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, const String& stop_name);
-
-std::vector<Monitor> GetFilteredMonitors(const std::vector<Monitor>& data, const String& filter);
 
 #endif//__TRAFFIC_H__

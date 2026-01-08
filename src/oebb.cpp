@@ -123,27 +123,57 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
     const JsonObject data = root["params"]["data"];
     const JsonArray departures = data["departures"];
     const JsonArray notices = data["specialNotices"];
+    String eva_filter = config.get_eva_filter();
+    Serial.printf("EVA: %s\n", eva_filter);
+    std::vector<String> filters;
+    if(eva_filter.length()){
+        int pos = 0, end = eva_filter.indexOf(",", pos);
+        if(end == -1){
+            filters.push_back(eva_filter);
+        } else {
+            do {
+                filters.push_back(eva_filter.substring(pos, end));
+                pos = end+1;
+                end = eva_filter.indexOf(",", pos);
+            } while(end != -1);
+            //Add the last elment
+            filters.push_back(eva_filter.substring(pos));
+        }
+    }
+
     if (!departures.isNull()) {
         for (const auto& departure : departures) {
             String line_name = departure["line"].as<String>();
+            bool filter_match = filters.empty();
+            for(String filter : filters){
+                if(filter == line_name) {
+                    filter_match = true;
+                    break;
+                }
+            }
+            if(!filter_match){
+                continue;
+            }
             const JsonObject dst = departure["destination"];
-            const JsonObject via = departure["via"];
-            String towards = Screen::ConvertGermanToLatin(dst["default"].as<String>()) + " - Platform " + departure["track"].as<String>();
-            String info = Screen::ConvertGermanToLatin(via["default"].as<String>());
-            info.replace("&#8203;", "");
-            String stop = this->station_name + " " + info;
+            String towards = Screen::ConvertGermanToLatin(dst["default"].as<String>());
+            // const JsonObject via = departure["via"];
+            // String via_txt = Screen::ConvertGermanToLatin(via["default"].as<String>());
+            // via_txt.replace("&#8203;", "");
+            String stop = this->station_name + ": Platform " + departure["track"].as<String>();
             String time = dst["default"].as<String>();
-            time_t scheduled = departure["scheduled"].as<time_t>();
-            int minutes_to_depart = static_cast<int>(difftime(scheduled, now) / 60);
-
-            
+            time_t scheduled;
+            if(!departure["expected"].isNull()) {
+                scheduled = departure["expected"].as<time_t>();
+            } else {
+                scheduled = departure["scheduled"].as<time_t>();
+            }
             Monitor* monitor_p = findMonitor(this->monitors, line_name, stop);
             Monitor monitor;
             monitor.line = line_name;
             monitor.stop = stop;
             monitor.towards = towards;
             monitor.is_barrier_free = false;
-
+            // Add special notices
             // struct TrafficInfo traffic_info;
             // traffic_info.related_lines.push_back(line_name);
             // traffic_info.description = info;
@@ -154,11 +184,26 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
             // }
 
             Vehicle vehicle;
-            vehicle.countdown = minutes_to_depart;
+            vehicle.countdown = static_cast<int>(difftime(scheduled, now) / 60);
             vehicle.line = monitor.line;
             vehicle.towards = monitor.towards;
             vehicle.is_barrier_free = monitor.is_barrier_free;
             vehicle.has_folding_ramp = false;
+            vehicle.is_canceled = false;
+            vehicle.is_airport = false;
+            JsonArray flags = departure["flags"];
+            for(JsonVariant flag : flags){
+                String f = flag.as<String>();
+                if(f == "CANCELED") {
+                    vehicle.is_canceled = true;
+                } else if(f == "AIRPORT") {
+                    // ToDo add Airplane symbol to screen
+                    vehicle.is_airport = true;
+                }
+            }
+            if(vehicle.is_canceled){
+                continue;
+            }
             if (monitor_p) {
                 //Monitor with line name already exists -> different towards
                 monitor_p->vehicles.push_back(vehicle);

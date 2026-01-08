@@ -91,8 +91,6 @@ class PowerManager {
 
         void backlight_dim(double brightness, int duration);
 
-        void toggle_backlight();
-
         bool is_backlight_on();
 
         void backlight_on(double brightness = 100.0);

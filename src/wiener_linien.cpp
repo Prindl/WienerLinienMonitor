@@ -47,12 +47,11 @@ void WLDeparture::task_update(void * pvParameters) {
 
             // Check if the request was successful
             if (http_code == HTTP_CODE_OK) {
-                // Stream parsing - NO String buffer!
-                // WiFiClient& stream = http.getStream();
-                // For big JSON Stream parsing does not work on ESP32
-                String payload = https.getString();
                 DECLARE_JSON_DOC(root);
-                DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(64));
+                WiFiClient& stream = https.getStream();
+                DeserializationError error = deserializeJson(root, stream, DeserializationOption::NestingLimit(32));
+                // String payload = https.getString();
+                // DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(32));
                 if (error) {
                     Serial.printf("JSON parsing error: %S\n", error.c_str());
                     https.end();
@@ -116,12 +115,38 @@ void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
     const JsonArray json_monitors = data["monitors"];
     Serial.printf("Received %d monitor from WinerLinien API\n", json_monitors.size());
     if (!json_monitors.isNull()) {
+        String rbl_filter = config.get_rbl_filter();
+        std::vector<String> filters;
+        if(rbl_filter.length()){
+            int pos = 0, end = rbl_filter.indexOf(",", pos);
+            if(end == -1){
+                filters.push_back(rbl_filter);
+            } else {
+                do {
+                    filters.push_back(rbl_filter.substring(pos, end));
+                    pos = end+1;
+                    end = rbl_filter.indexOf(",", pos);
+                } while(end != -1);
+                //Add the last elment
+                filters.push_back(rbl_filter.substring(pos));
+            }
+        }
         for (const auto& json_monitor : json_monitors) {
             const JsonArray json_lines = json_monitor["lines"];
             const JsonObject json_stop = json_monitor["locationStop"]["properties"];
             String stop_name = Screen::ConvertGermanToLatin(json_stop["title"].as<String>());
             for (const auto& json_line : json_lines) {
                 String line_name = json_line["name"].as<String>();
+                bool filter_match = filters.empty();
+                for(String filter : filters){
+                    if(filter == line_name) {
+                        filter_match = true;
+                        break;
+                    }
+                }
+                if(!filter_match){
+                    continue;
+                }
                 String line_towards = fix_json(json_line["towards"].as<String>());
                 bool line_barrierfree = json_line["barrierFree"].as<bool>();
                 Monitor* monitor_p = findMonitor(this->monitors, line_name, stop_name);
@@ -148,6 +173,8 @@ void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
                         const JsonObject departureTime = departure["departureTime"];
                         if (!departureTime.isNull()) {
                             Vehicle vehicle;
+                            vehicle.is_canceled = false;
+                            vehicle.is_airport = false;
                             vehicle.countdown = departureTime["countdown"].as<int>();
                             const JsonObject json_vehicle = departure["vehicle"];
                             if (!json_vehicle.isNull()) {

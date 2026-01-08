@@ -6,10 +6,10 @@ void Configuration::load() {
     // Load values into ram
     this->begin(true);
     this->ram_number_lines = this->db.getInt(PREF_NUM_LINES, DEFAULT_NUMBER_LINES);
-    this->ram_rbl_filter = this->db.getString(PREF_RBL_FILTER);
     this->ram_rbl = this->db.getString(PREF_RBL);
-    this->ram_rbl_filter = this->db.getString(PREF_EVA_FILTER);
+    this->ram_rbl_filter = this->db.getString(PREF_RBL_FILTER);
     this->ram_eva = this->db.getString(PREF_EVA);
+    this->ram_eva_filter = this->db.getString(PREF_EVA_FILTER);
     this->ram_eco_mode = static_cast<EcoMode>(this->db.getInt(PREF_ECO_MODE, ECO_LIGHT));
     this->ram_eco_state = static_cast<EcoModeState>(this->db.getInt(PREF_ECO_STATE, ECO_OFF));
     this->ram_brightness = this->db.getDouble(PREF_BRIGHTNESS, 100.0);
@@ -52,6 +52,7 @@ int32_t Configuration::get_number_lines() {
 
 void Configuration::set_rbl_filter(const String& value) {
     this->ram_rbl_filter = value;
+    this->ram_rbl_filter.trim();
     this->begin();
     this->db.putString(PREF_RBL_FILTER, this->ram_rbl_filter);
     this->end();
@@ -63,8 +64,9 @@ const String& Configuration::get_rbl_filter() {
 
 void Configuration::set_eva_filter(const String& value) {
     this->ram_eva_filter = value;
+    this->ram_eva_filter.trim();
     this->begin();
-    this->db.putString(PREF_RBL_FILTER, this->ram_eva_filter);
+    this->db.putString(PREF_EVA_FILTER, this->ram_eva_filter);
     this->end();
 }
 

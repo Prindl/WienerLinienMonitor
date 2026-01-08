@@ -22,66 +22,6 @@ Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, co
     return nullptr;
 }
 
-/**
- * @brief Splits a string by a specified separator character.
- * @param data The input string to be split.
- * @param separator The character used for splitting.
- * @return A vector of substrings resulting from the split operation.
- */
-std::vector<String> GetSplittedStrings(String data, char separator) {
-    int separatorIndex = 0;
-    std::vector<String> result;
-
-    while (separatorIndex != -1) {
-        separatorIndex = data.indexOf(separator);
-        String chunk = data.substring(0, separatorIndex);
-        result.push_back(chunk);
-        if (separatorIndex != -1) {
-            data = data.substring(separatorIndex + 1);
-        }
-    }
-
-    return result;
-}
-
-std::vector<Monitor> GetFilteredMonitors(const std::vector<Monitor>& data, const String& filter) {
-    if (filter.isEmpty()) {
-        return data;
-    }
-    std::vector<String> filter_entries = GetSplittedStrings(filter, ',');
-    std::vector<Monitor> result;
-
-    for (const auto& monitor : data) {
-        for (const auto& entry : filter_entries) {
-
-            // Trim whitespace (optional, but recommended)
-            String trimmed = entry;
-            trimmed.trim();
-
-            // Check if this entry contains '/'
-            int slashIndex = trimmed.indexOf('/');
-
-            if (slashIndex < 0) {
-                // Entry is just "name"
-                if (monitor.line == trimmed) {
-                    result.push_back(monitor);
-                    break;
-                }
-            } else {
-                // Entry is "name/direction"
-                String nameFilter = trimmed.substring(0, slashIndex);
-                String directionFilter = trimmed.substring(slashIndex + 1);
-
-                if (monitor.line == nameFilter && strncmp(monitor.towards.c_str(), directionFilter.c_str(), directionFilter.length()) == 0) {
-                    result.push_back(monitor);
-                    break;
-                }
-            }
-        }
-    }
-    return result;
-}
-
 TrafficClock::TrafficClock(long ms_perCountdown, long cd_perIterations, long it_perHour)
     : kMillisecondsPerCountdown(ms_perCountdown),
       kCountdownsPerIteration(cd_perIterations),
@@ -231,7 +171,7 @@ void TraficManager::update(const std::vector<Monitor>& vec) {
 
 void TraficManager::updateScreen() {
     Screen& screen = Screen::getInstance();
-    if (all_trafic_set.empty()) {
+    if (!this->has_data()) {
         screen.DrawCenteredText("No Real-Time information available.");
         return;
     }
@@ -273,14 +213,13 @@ void TraficManager::updateScreen() {
             sortTrafic(futureSubset);
             SelectiveReset(currentTraficSubset, futureSubset);
             shift_cnt += cnt_screen_rows;
-    }
-    DrawTraficOnScreen(currentTraficSubset);
+        }
+        DrawTraficOnScreen(currentTraficSubset);
     }
 }
 
 void TraficManager::SelectiveReset(const std::vector<Monitor>& currentTraficSubset, const std::vector<Monitor>& futureSubset) {
     Screen& screen = Screen::getInstance();
-    // screen.PrintCordDebug();
     if (currentTraficSubset.size() == futureSubset.size()) {
 
       size_t size = futureSubset.size();
@@ -298,8 +237,6 @@ void TraficManager::SelectiveReset(const std::vector<Monitor>& currentTraficSubs
         screen.SelectiveResetScroll(isNeedReset);
       }
     }
-
-    // screen.PrintCordDebug();
 }
 
 void TraficManager::sortTrafic(std::vector<Monitor>& v) {
@@ -335,6 +272,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
             ScreenEntity monitor;
             std::vector<String> clean_str;
             bool accessibility = false;
+            bool airport = false;
             bool ramp = false;
             for (size_t x = 0; x < TEXT_ROWS_PER_MONITOR; ++x) {
                 clean_str.push_back("");
@@ -367,7 +305,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
                         const Vehicle& vehicle = currentMonitor.vehicles[vehicle_idx];
                         monitor.right_txt = vehicle.line;
 
-                        if (vehicle.countdown == 0) {
+                        if (vehicle.countdown <= 0) {
                             if ((millis() / 1000) % 2) {
                                 monitor.left_txt = String("◱");
                             } else {
@@ -377,6 +315,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
                             monitor.left_txt = String(vehicle.countdown, DEC);
                         }
                         accessibility = vehicle.is_barrier_free;
+                        airport = vehicle.is_airport;
                         ramp = vehicle.has_folding_ramp;
                         if (has_traffic_info) {
                             towards_display = currentMonitor.stop + " - " + vehicle.towards;
@@ -418,7 +357,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
 
                 if (!currentMonitor.vehicles.empty()) {
                     const Vehicle& vehicle = currentMonitor.vehicles[idx];
-                    if (vehicle.countdown == 0) {
+                    if (vehicle.countdown <= 0) {
                         if ((millis() / 1000) % 2) {
                           monitor.left_txt = String("◱");
                         } else {
@@ -429,6 +368,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
                     }
                     accessibility = vehicle.is_barrier_free;
                     ramp = vehicle.has_folding_ramp;
+                    airport = vehicle.is_airport;
                     if (has_traffic_info) {
                         towards_display = currentMonitor.stop + " - " + vehicle.towards;
                     } else {
@@ -451,6 +391,7 @@ void TraficManager::DrawTraficOnScreen(const std::vector<Monitor>& currentTraffi
             monitor.lines = clean_str;
             monitor.is_barrier_free = accessibility;
             monitor.has_folding_ramp = ramp;
+            monitor.is_airport = airport;
             vec_screen_entity.push_back(monitor);
         }
         // render entity

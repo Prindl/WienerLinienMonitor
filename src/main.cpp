@@ -37,31 +37,6 @@ ButtonTaskConfig button_2_cfg;
 
 WLDeparture wl_departure = WLDeparture();
 OEBBDeparture oebb_departure = OEBBDeparture();
-class SmartWatch {
-    public:
-        SmartWatch(const char* function_name) : function_name(function_name), start_millis(millis()) {
-
-        }
-
-        unsigned long GetExecution_ms() {
-            unsigned long end_millis = millis();
-            return end_millis - start_millis;
-        }
-
-        ~SmartWatch() {
-#ifdef DEBUG
-            Serial.print("Function '");
-            Serial.print(function_name);
-            Serial.print("' executed in ");
-            Serial.print(GetExecution_ms());
-            Serial.println(" milliseconds.");
-#endif
-        }
-
-    private:
-        const char* function_name;
-        unsigned long start_millis;
-};
 
 /* Task Functions */
 

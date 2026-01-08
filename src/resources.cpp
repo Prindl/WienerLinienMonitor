@@ -4,13 +4,6 @@ String StringDatabase::GetWiFissid() {
   return "Wiener Linien Monitor";
 }
 
-String StringDatabase::GetInstructionsText() {
-  String instruction_start =
-    "Wait a few seconds or:\n1) Take a smartphone.\n2) Connect to Wi-Fi:\n \"";
-  String instruction_end = "\"\n3) And follow prompts. (^_^)\n";
-  return instruction_start + StringDatabase::GetWiFissid() + instruction_end;
-}
-
 String StringDatabase::GetRBLPrompt() {
   return String(RBLPrompt);
 }

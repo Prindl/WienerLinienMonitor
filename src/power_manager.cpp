@@ -103,21 +103,9 @@ void PowerManager::setup() {
         this->save_wfi_manager_parameters(wifi_manager);
     }
 
-    // this->reboot_timer = xTimerCreate(
-    //     "RebootTimer",
-    //     pdMS_TO_TICKS(config.settings.ms_reboot_interval),
-    //     pdFALSE, // Happens only once
-    //     (void*)0,
-    //     &reboot_timer_callback
-    // );
-
-    // if (this->reboot_timer != NULL) {
-    //     xTimerStart(this->reboot_timer, 0);
-    // }
-
     const esp_timer_create_args_t periodic_timer_args = {
         .callback = &reboot_timer_callback,
-        .name = "daily_reboot"
+        .name = "reboot_timer"
     };
     esp_timer_create(&periodic_timer_args, &handle_reboot_timer);
     uint64_t reboot_interval_us = config.settings.ms_reboot_interval * 1000ULL;
@@ -229,16 +217,8 @@ void PowerManager::draw(){
     }
 }
 
-void PowerManager::toggle_backlight(){
-    if (is_backlight_on()) {
-        backlight_on();
-    } else {
-        backlight_off();
-    }
-}
-
 double PowerManager::get_brightness(){
-    if (use_bl_pwm) {
+    if (this->is_dimming_enabled()) {
         int current_level = ledcRead(bl_pwm_channel);
         double y = double(current_level) / DEFAULT_MAX_LEVEL;
         if (y <= 0.0) return 0.0;
@@ -259,7 +239,7 @@ bool PowerManager::is_dimming_enabled(){
 }
 
 bool PowerManager::is_backlight_on(){
-    if (use_bl_pwm) {
+    if (this->is_dimming_enabled()) {
         return ledcRead(bl_pwm_channel) > 0; // at least 25% brightness
     } else {
         return digitalRead(TFT_BL) == TFT_BACKLIGHT_ON;
@@ -268,7 +248,7 @@ bool PowerManager::is_backlight_on(){
 
 void PowerManager::backlight_on(double brightness){
     if (!is_backlight_on()) {
-        if (use_bl_pwm) {
+        if (this->is_dimming_enabled()) {
             backlight_dim(brightness, DEFAULT_DURATION);
         } else {
             digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
@@ -278,7 +258,7 @@ void PowerManager::backlight_on(double brightness){
 
 void PowerManager::backlight_off(double brightness){
     if (is_backlight_on()) {
-        if (use_bl_pwm) {
+        if (this->is_dimming_enabled()) {
             backlight_dim(brightness, DEFAULT_DURATION);
         } else {
             digitalWrite(TFT_BL, LOW);
@@ -288,7 +268,7 @@ void PowerManager::backlight_off(double brightness){
 
 void PowerManager::setup_backlight_pwm() {
     //find an appropriate ledChannel
-    if(use_bl_pwm){
+    if(this->is_dimming_enabled()){
         ledcDetachPin(TFT_BL);
         use_bl_pwm = false;
     }
@@ -334,25 +314,15 @@ void PowerManager::backlight_dim(double brightness, int duration) {
 
 void PowerManager::display_off() {
     backlight_off(0.0);
-
-    // _tft.writecommand(TFT_SLPIN);
-
-    // 3. Cut physical power to the LCD (GPIO 15)
-    // This also kills the green power LED to save a few more mA
-    // digitalWrite(15, LOW); 
 }
 
 void PowerManager::display_on() {
-//   digitalWrite(15, HIGH);
-//   delay(50); // Give the LCD controller time to wake up
-//   tft.begin(); // You usually need to re-init the screen after GPIO 15 was LOW
-    // _tft.writecommand(TFT_SLPOUT);
     backlight_on(config.get_brightness());
 }
 
 void PowerManager::set_cpu_frequency(int f) {
     setCpuFrequencyMhz(f);
-    if(use_bl_pwm){
+    if(this->is_dimming_enabled()){
         setup_backlight_pwm(); // Resync the PWM signal with updated cpu signal
     }
 }

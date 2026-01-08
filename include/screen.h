@@ -11,10 +11,11 @@ extern Configuration config;
 
 struct ScreenEntity {
   String right_txt;  // Line name 2, 72, D etc.
+  String left_txt;
   std::vector<String> lines;
   bool is_barrier_free;
   bool has_folding_ramp;
-  String left_txt;
+  bool is_airport;
 };
 
 enum ScrollState { WAIT_BEFORE, SCROLLING, WAIT_AFTER };
@@ -62,10 +63,6 @@ class Screen {
        */
        void DrawRow(const ScreenEntity& monitor, int idx_row);
 
-       bool IsEnoughSpaceForMiddleText(const String& str);
-
-       void PrintCordDebug();
-
        /**
        * @brief Converts a single German string to Latin alphabet.
        *
@@ -79,8 +76,6 @@ class Screen {
        */
        static String ConvertGermanToLatin(String input);
 
-       int GetMinTextSprite_px();
-
        int GetNumberRows();
 
        void DrawCenteredText(const String& text);
@@ -89,20 +84,6 @@ class Screen {
 
     private:
         explicit Screen(TFT_eSPI& tft, int cnt_rows);
-
-        /**
-       * @brief Converts a vector of German strings to Latin alphabet.
-       *
-       * Takes a vector of German strings and converts each string from
-       * German characters (e.g., ä, Ä, ö, Ö, ü, Ü, ß) to their Latin alphabet
-       * equivalents (a, A, o, O, u, U, s). The converted strings are then returned
-       * in a new vector.
-       *
-       * @param vecGerman A vector of German strings to be converted.
-       *
-       * @return A vector of strings in Latin alphabet.
-       */
-        std::vector<String> ConvertGermanToLatin(const std::vector<String>& vecGerman);
 
         /**
        * @brief Draws the countdown text on the screen for a specific idx_row.
@@ -131,7 +112,7 @@ class Screen {
        * @param idx_row The idx_row index where the text content should be set and
        * drawn.
        */
-        void DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_barrier_free,  bool has_folding_ramp, int idx_row);
+        void DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_barrier_free,  bool has_folding_ramp, bool is_airport, int idx_row);
         /**
        * @brief Draws text on a sprite and pushes it to the screen at the specified
        * coordinates.
