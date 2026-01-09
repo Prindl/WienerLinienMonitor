@@ -158,19 +158,14 @@ void action_switch_layout(Configuration& config){
 
 void action_reconfigure(Configuration& config){
     PowerManager& pm = PowerManager::getInstance();
-    if(!pm.is_portal_active()){
-        oebb_departure.close();
-        pm.notify_reconfiguration();
-    } else{
-        pm.deactivate_portal();
-        ESP.restart();
-
-        // if (WiFi.status() == WL_CONNECTED) {
-        //     // Add a 1s stabilization delay before re-starting SSL
-        //     vTaskDelay(pdMS_TO_TICKS(1000));
-        //     oebb_departure.setup(); // Re-initiate WSS
-        // }
-    }
+    // Only reconfigure when eco mode is off
+    // if(!pm.is_eco_active()){
+        if(!pm.is_portal_active()){
+            pm.notify_reconfiguration();
+        } else{
+            pm.deactivate_portal();
+        }
+    // }
 }
 
 /* Eco Mode State Transitions Functions */
@@ -181,16 +176,15 @@ void activate_eco_mode() {
         oebb_departure.close();
     }
     pm.eco_mode_on();
-    if (!pm.is_eco_active()) {
-        config.set_eco_mode_state(ECO_ON);
-    }
+    config.set_eco_mode_state(ECO_ON);
 }
 
 void deactivate_eco_mode() {
     PowerManager& pm = PowerManager::getInstance();
     pm.eco_mode_off();
     config.set_eco_mode_state(ECO_OFF);
-    if (config.get_eco_mode() == ECO_HEAVY){
+    if (config.get_eco_mode() == ECO_HEAVY && !oebb_departure.is_connected()){
+        vTaskDelay(pdMS_TO_TICKS(1000));
         oebb_departure.setup();
     }
 }
@@ -204,6 +198,20 @@ void setup() {
     TraficManager& tm = TraficManager::getInstance();
     // Initialize Serial communication
     Serial.begin(115200);
+
+    // Check if PSRAM is available
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+    if(!(chip_info.features & CHIP_FEATURE_EMB_PSRAM)) {
+        Serial.println("No embedded PSRAM available.");
+    }
+    uint32_t psram_size = ESP.getPsramSize();
+    if(psram_size > 0){
+        Serial.printf("PSRAM detected, total size: %d bytes\n", psram_size);
+        if (!esp_spiram_is_initialized()) {
+            Serial.printf("PSRAM not initialised!\n");
+        }
+    }
 
     Serial.println("Turning Bluetooth OFF...");
     pm.bluetooth_stop();
@@ -262,14 +270,14 @@ void setup() {
         delay(config.settings.error_reset_delay);
         ESP.restart();  // Restart the ESP32
     }
+    if (config.get_eco_mode_state() != ECO_OFF) {
+        pm.eco_mode_on();
+    }
     // Setup is finished, setup WienerLinien Timer
     wl_departure.setup();
     // Requires Internet to fetch station ID
-    if (config.get_eva().length()){
+    if(!pm.is_eco_active()){
         oebb_departure.setup();
-    }
-    if (config.get_eco_mode_state() != ECO_OFF) {
-        pm.eco_mode_on();
     }
 
     // Configure User Buttons

@@ -1,6 +1,6 @@
 #include "config.h"
 
-Configuration::Configuration() {}
+Configuration::Configuration() : ram_eco_mode(ECO_LIGHT), ram_eco_state(ECO_OFF), ram_brightness(100.0) {}
 
 void Configuration::load() {
     // Load values into ram

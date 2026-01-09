@@ -8,7 +8,7 @@ void OEBBDeparture::task_traffic(void *pvParameters) {
         if (instance->web_socket.isConnected()) {
             // If connected, loop is lightweight (just keep-alive)
             instance->web_socket.loop();
-        } else if (network.acquire()) {
+        } else if (network.acquire() == pdTRUE) {
             // If disconnected, loop() implies a heavy Reconnect Handshake!
             instance->web_socket.loop();
             network.release();
@@ -54,7 +54,7 @@ void OEBBDeparture::event(WStype_t type, uint8_t * payload, size_t length) {
         if(payload){
             Serial.printf("[WS] Disconnected: %s\n", payload);
         } else {
-            Serial.printf("[WS] Disconnected.");
+            Serial.printf("[WS] Disconnected.\n");
         }
     } else if(type == WStype_ERROR){
         Serial.printf("[WS] Error.\n");
@@ -69,8 +69,6 @@ void OEBBDeparture::get_station() {
     if(eva.length() > 0){
         if (network.acquire() == pdTRUE) {
             HTTPClient https;
-            https.setReuse(true);
-            https.setUserAgent(USR_AGENT);
             for(int i=pos; i<pos+eva.length(); i++){
                 url[i] = eva[i-pos];
             }
@@ -81,28 +79,32 @@ void OEBBDeparture::get_station() {
 
             int http_code = https.GET();
 
-            if (http_code > 0) {
-                Serial.printf("[HTTP] GET... code: %d\n", http_code);
-                if (http_code == HTTP_CODE_OK) {
-                    String payload = https.getString();
-                    DECLARE_JSON_DOC(root);
-                    DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(64));
-                    if (error) {
-                        Serial.printf("JSON parsing error: %S\n", error.c_str());
-                    } else {
-                        if (!root["name"].isNull()){
-                            this->station_name = root["name"].as<String>();
-                        }
-                        if (!root["plc"].isNull()){
-                            this->station_id = root["plc"].as<String>();
-                        }
+            if (http_code == HTTP_CODE_OK) {
+                WiFiClient& stream = https.getStream();
+                // String payload = https.getString();
+                DECLARE_JSON_DOC(root);
+                DeserializationError error = deserializeJson(root, stream);
+                if (error) {
+                    Serial.printf("JSON parsing error: %S\n", error.c_str());
+                } else {
+                    if (!root["name"].isNull()){
+                        this->station_name = root["name"].as<String>();
                     }
-                    Serial.printf("Station %s: %s\n", this->station_name, this->station_id);
-                } else if (http_code == 304) {
-                    Serial.println("[HTTP] 304: Data hasn't changed since your If-Modified-Since date.");
+                    if (!root["plc"].isNull()){
+                        this->station_id = root["plc"].as<String>();
+                    }
                 }
+                Serial.printf("Station %s: %s\n", this->station_name, this->station_id);                
             } else {
-                Serial.printf("[HTTP] GET... failed, error: %s\n", https.errorToString(http_code).c_str());
+                Serial.printf("HTTP Code: %d\n", http_code);
+                // Currently the software causes a lot of heap fragmentation
+                // This causes the SSL connection to fail, because it needs a lot of continuous RAM 
+                // To fix this the original software defined a reboot interval
+                // If SSL fails, the connection will be refused
+                if (http_code == HTTPC_ERROR_CONNECTION_REFUSED){
+                    // We restart to reset the heap
+                    ESP.restart();
+                }
             }
             https.end();
             network.release();
@@ -124,7 +126,6 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
     const JsonArray departures = data["departures"];
     const JsonArray notices = data["specialNotices"];
     String eva_filter = config.get_eva_filter();
-    Serial.printf("EVA: %s\n", eva_filter);
     std::vector<String> filters;
     if(eva_filter.length()){
         int pos = 0, end = eva_filter.indexOf(",", pos);
@@ -228,13 +229,10 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
 }
 
 OEBBDeparture::OEBBDeparture() : internal_mutex(nullptr), handle_task_traffic(nullptr), notification(nullptr) {
-
+    this->internal_mutex = xSemaphoreCreateMutex();
 }
 
 void OEBBDeparture::setup() {
-    if(this->internal_mutex == nullptr){
-        this->internal_mutex = xSemaphoreCreateMutex();
-    }
     this->get_station();
     if (this->station_id.length() > 0){
         this->close();// If it was setup already, close the existing departure board

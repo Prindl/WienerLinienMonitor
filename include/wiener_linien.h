@@ -12,6 +12,7 @@
 
 class WLDeparture {
     private:
+        WiFiClientSecure secure_client;
         SemaphoreHandle_t internal_mutex;
         TimerHandle_t handle_timer_update;
         TaskHandle_t handle_task_update;

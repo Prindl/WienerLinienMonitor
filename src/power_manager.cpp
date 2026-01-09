@@ -103,17 +103,6 @@ void PowerManager::setup() {
         this->save_wfi_manager_parameters(wifi_manager);
     }
 
-    const esp_timer_create_args_t periodic_timer_args = {
-        .callback = &reboot_timer_callback,
-        .name = "reboot_timer"
-    };
-    esp_timer_create(&periodic_timer_args, &handle_reboot_timer);
-    uint64_t reboot_interval_us = config.settings.ms_reboot_interval * 1000ULL;
-    esp_timer_start_once(
-        handle_reboot_timer,
-        reboot_interval_us
-    );
-
     BaseType_t status = xTaskCreatePinnedToCore(
         this->task_config_portal,
         "task_config_portal",
@@ -436,24 +425,18 @@ void PowerManager::task_config_portal(void *pvParameters) {
 
         Serial.println("Config Task: Starting Portal...");
 
-        if (config.get_eco_mode() == ECO_HEAVY) {
-            pm->wifi_start();
-        }
-        if(pm->is_eco_active()) {
-            pm->display_on();
+        if (pm->is_eco_active()){
+            if(config.get_eco_mode() == ECO_HEAVY) {
+                pm->wifi_start();
+            }
+            pm->backlight_on(100);
         }
         pm->reconfigure();
         if(pm->is_eco_active()) {
             pm->display_off();
-        }
-        if (config.get_eco_mode() == ECO_HEAVY) {
-            pm->wifi_stop();
+            if (config.get_eco_mode() == ECO_HEAVY) {
+                pm->wifi_stop();
+            }
         }
     }
-}
-
-// void PowerManager::reboot_timer_callback(TimerHandle_t xTimer) {
-void IRAM_ATTR PowerManager::reboot_timer_callback(void* arg) {
-    Serial.println("Reboot timer expired. Restarting ESP32...");
-    ESP.restart();
 }

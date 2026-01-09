@@ -41,8 +41,8 @@ void WLDeparture::task_update(void * pvParameters) {
             }
             Serial.printf("Fetching: %s\n", url);
 
-            // Start the HTTP request
-            https.begin(url);
+            // Start the HTTP request, reuse the SSL connection to avaoid failure because of heap fragmentation
+            https.begin(instance->secure_client, url);
             int http_code = https.GET();
 
             // Check if the request was successful
@@ -73,6 +73,14 @@ void WLDeparture::task_update(void * pvParameters) {
                 Serial.printf("Merged into %ld monitors.\n", instance->monitors.size());
             } else {
                 Serial.printf("HTTP Code: %d\n", http_code);
+                // Currently the software causes a lot of heap fragmentation
+                // This causes the SSL connection to fail, because it needs a lot of continuous RAM 
+                // To fix this the original software defined a reboot interval
+                // If SSL fails, the connection will be refused
+                if (http_code == HTTPC_ERROR_CONNECTION_REFUSED){
+                    // We restart to reset the heap
+                    ESP.restart();
+                }
             }
             https.end();
             network.release();
@@ -217,10 +225,12 @@ void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
 }
 
 WLDeparture::WLDeparture() : internal_mutex(nullptr), handle_timer_update(nullptr), handle_task_update(nullptr), notification(nullptr){
+    this->internal_mutex = xSemaphoreCreateMutex();
+    this->secure_client = WiFiClientSecure();
+    this->secure_client.setInsecure();
 }
 
 void WLDeparture::setup(){
-    this->internal_mutex = xSemaphoreCreateMutex();
     BaseType_t status = xTaskCreatePinnedToCore(
         &task_update,
         "task_update_wl",
@@ -242,6 +252,8 @@ void WLDeparture::setup(){
     );
 
     if (this->handle_timer_update != NULL) {
+        // Run the update function immediately once
+        callback_timer_update(this->handle_timer_update);
         xTimerStart(this->handle_timer_update, 0);
     }    
 }
@@ -253,7 +265,6 @@ void WLDeparture::set_notification(TaskHandle_t task){
 void WLDeparture::get_latest_snapshot(std::vector<Monitor>& data){
     data.clear();
     // Lock briefly just to copy the internal vector
-    std::vector<Monitor> snapshot;
     if (xSemaphoreTake(this->internal_mutex, portMAX_DELAY) == pdTRUE) {
         data.insert(data.end(), this->monitors.begin(), this->monitors.end());
         xSemaphoreGive(this->internal_mutex);

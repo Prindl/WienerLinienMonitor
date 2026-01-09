@@ -30,8 +30,6 @@ class PowerManager {
         TFT_eSPI _tft = TFT_eSPI();
         TaskHandle_t task_screen;
         TaskHandle_t task_reconfigure;
-        // TimerHandle_t reboot_timer;
-        esp_timer_handle_t handle_reboot_timer;
         int bl_pwm_channel;
         bool use_bl_pwm;
         bool _is_portal_active;
@@ -49,9 +47,6 @@ class PowerManager {
         void setup_backlight_pwm();
 
         static void task_config_portal(void *pvParameters);
-
-        // static void reboot_timer_callback(TimerHandle_t xTimer);
-        static void IRAM_ATTR reboot_timer_callback(void* arg);
 
     public:
 

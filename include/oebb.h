@@ -12,7 +12,6 @@
 #include "network_manager.h"
 
 #define URL_OEBB "https://meine.oebb.at/abfahrtankunft/api/evaNrs/"
-#define USR_AGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0"
 
 extern Configuration config;
 

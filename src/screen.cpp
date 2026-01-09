@@ -633,5 +633,3 @@ void Screen::SelectiveResetScroll(const std::vector<bool>& isNeedReset) {
         }
     }
 }
-
-

@@ -206,8 +206,6 @@ class Screen {
      
         TFT_eSPI& _tft;
         SemaphoreHandle_t internal_mutex;
-        uint16_t color_bg;
-        uint16_t color_txt;
         ///< The maximum px_width of the name text in pixels.
         int px_max_width_name_text;
         ///< The maximum px_width of the countdown text in pixels.
