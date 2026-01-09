@@ -2,17 +2,6 @@
 #define __JSON_H__
 
 #include <ArduinoJson.h> // by Benoit Blanchon
-
-
-#define USE_ARDUINOJSON_V7
-
-#ifdef USE_ARDUINOJSON_V7
-#define DECLARE_JSON_DOC(name) JsonDocument name
-#else
-#define JSON_HEAP_SIZE (2048 * 16)
-#define DECLARE_JSON_DOC(name) DynamicJsonDocument name(JSON_HEAP_SIZE)
-#endif
-
 #include <time.h>
 
 time_t timegm(struct tm *const t);

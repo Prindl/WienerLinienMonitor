@@ -1,7 +1,6 @@
 #include "screen.h"
 #include "wiener_linien.h"
 
-
 String WLDeparture::fix_json(String word) {
     word = Screen::ConvertGermanToLatin(word);
     // Check if the input string contains spaces
@@ -18,6 +17,36 @@ String WLDeparture::fix_json(String word) {
 void WLDeparture::task_update(void * pvParameters) {
     WLDeparture* instance = (WLDeparture*)pvParameters;
     NetworkManager& network = NetworkManager::getInstance();
+    JsonDocument filter;
+    // To filter the huge json WL is providing
+    if(filter["data"].isNull()){
+        JsonObject filter_data = filter["data"].to<JsonObject>();
+
+        JsonObject filter_monitors = filter_data["monitors"].add<JsonObject>();
+        filter_monitors["locationStop"]["properties"]["title"] = true;
+
+        JsonObject filter_lines = filter_monitors["lines"].add<JsonObject>();
+        filter_lines["name"] = true;
+        filter_lines["towards"] = true;
+        filter_lines["barrierFree"] = true;
+        filter_lines["foldingRamp"] = true;
+        filter_lines["trafficjam"] = true;
+
+        JsonObject filter_departure = filter_lines["departures"]["departure"].add<JsonObject>();
+        filter_departure["departureTime"]["countdown"] = true;
+
+        JsonObject filter_vehicle = filter_departure["vehicle"].to<JsonObject>();
+        filter_vehicle["name"] = true;
+        filter_vehicle["towards"] = true;
+        filter_vehicle["barrierFree"] = true;
+        filter_vehicle["foldingRamp"] = true;
+        filter_vehicle["trafficjam"] = true;
+
+        JsonObject filter_trafficInfos = filter_data["trafficInfos"].add<JsonObject>();
+        filter_trafficInfos["title"] = true;
+        filter_trafficInfos["description"] = true;
+        filter_trafficInfos["relatedLines"] = true;
+    }    
     char url[100] = URL_WIENER_LINIEN;
     const int pos = strlen(url);
     while(true) {
@@ -47,19 +76,20 @@ void WLDeparture::task_update(void * pvParameters) {
 
             // Check if the request was successful
             if (http_code == HTTP_CODE_OK) {
-                DECLARE_JSON_DOC(root);
-                WiFiClient& stream = https.getStream();
-                DeserializationError error = deserializeJson(root, stream, DeserializationOption::NestingLimit(32));
-                // String payload = https.getString();
-                // DeserializationError error = deserializeJson(root, payload, DeserializationOption::NestingLimit(32));
+                JsonDocument root;
+                // Stream parsing does not always work :/ (very large JSON this fails)
+                // WiFiClient& payload = https.getStream();
+                String payload = https.getString();
+                DeserializationError error = deserializeJson(
+                    root,
+                    payload,
+                    DeserializationOption::Filter(filter),
+                    DeserializationOption::NestingLimit(16)
+                );
                 if (error) {
                     Serial.printf("JSON parsing error: %S\n", error.c_str());
-                    https.end();
                     delay(config.settings.error_reset_delay);
-                    network.release();
-                    return;
-                }
-                if (xSemaphoreTake(instance->internal_mutex, portMAX_DELAY) == pdTRUE) {
+                } else if (xSemaphoreTake(instance->internal_mutex, portMAX_DELAY) == pdTRUE) {
                     instance->monitors.clear();
                     instance->fill_monitors_from_json(root);
                     xSemaphoreGive(instance->internal_mutex);
@@ -69,8 +99,8 @@ void WLDeparture::task_update(void * pvParameters) {
                     } else {
                         Serial.println("Data update notification skipped.");
                     }
+                    Serial.printf("Merged into %ld monitors.\n", instance->monitors.size());
                 }
-                Serial.printf("Merged into %ld monitors.\n", instance->monitors.size());
             } else {
                 Serial.printf("HTTP Code: %d\n", http_code);
                 // Currently the software causes a lot of heap fragmentation

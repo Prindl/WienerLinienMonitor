@@ -18,17 +18,39 @@ void OEBBDeparture::task_traffic(void *pvParameters) {
 }
 
 void OEBBDeparture::event(WStype_t type, uint8_t * payload, size_t length) {
+    static JsonDocument filter;
+    if(filter["jsonrpc"].isNull()){
+        filter["jsonrpc"] = true;
+        filter["method"] = true;
+        filter["id"] = true;
+
+        JsonObject filter_data = filter["params"]["data"].to<JsonObject>();
+        filter_data["specialNotices"] = true;
+
+        JsonObject filter_departures = filter_data["departures"].add<JsonObject>();
+        filter_departures["destination"]["default"] = true;
+        filter_departures["expected"] = true;
+        filter_departures["flags"] = true;
+        filter_departures["line"] = true;
+        // filter_departures["prioritizedVias"] = true;
+        // filter_departures["remarks"] = true;
+        filter_departures["scheduled"] = true;
+        filter_departures["track"] = true;
+        // filter_departures["via"] = true;
+    }
     NetworkManager& network = NetworkManager::getInstance();
     if(type == WStype_TEXT){
         if(network.acquire() == pdTRUE){
-            DECLARE_JSON_DOC(data);
+            JsonDocument data;
             // Serial.printf("[WS] Live Update: %s\n", payload);
-            DeserializationError error = deserializeJson(data, payload, DeserializationOption::NestingLimit(64));
+            DeserializationError error = deserializeJson(
+                data, payload, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(10)
+            );
             if (error) {
                 Serial.printf("JSON parsing error: %S\n", error.c_str());
             } else if (data["method"].as<String>() == "update") {
                 // Send response to server
-                DECLARE_JSON_DOC(response);
+                JsonDocument response;
                 response["jsonrpc"] = data["jsonrpc"];
                 response["result"] = JsonVariant();
                 response["id"] = data["id"];
@@ -82,7 +104,7 @@ void OEBBDeparture::get_station() {
             if (http_code == HTTP_CODE_OK) {
                 WiFiClient& stream = https.getStream();
                 // String payload = https.getString();
-                DECLARE_JSON_DOC(root);
+                JsonDocument root;
                 DeserializationError error = deserializeJson(root, stream);
                 if (error) {
                     Serial.printf("JSON parsing error: %S\n", error.c_str());
@@ -161,7 +183,6 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
             // String via_txt = Screen::ConvertGermanToLatin(via["default"].as<String>());
             // via_txt.replace("&#8203;", "");
             String stop = this->station_name + ": Platform " + departure["track"].as<String>();
-            String time = dst["default"].as<String>();
             time_t scheduled;
             if(!departure["expected"].isNull()) {
                 scheduled = departure["expected"].as<time_t>();

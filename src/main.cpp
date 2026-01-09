@@ -254,7 +254,7 @@ void setup() {
     TFT_eSPI& tft = pm.get_tft();
     tft.setCursor(0, 0, config.settings.instruction_font_size);
     tft.setTextColor(COLOR_TEXT_YELLOW, COLOR_BG);
-    tft.println("\n\nTime Synchronisation...");
+    tft.println("\n\n\nTime Synchronisation...");
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     Serial.println("Waiting for NTP time sync...");
     struct tm timeinfo;
