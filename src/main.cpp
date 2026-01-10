@@ -42,9 +42,11 @@ OEBBDeparture oebb_departure = OEBBDeparture();
 void task_data_coordinator(void* pvParameters) {
     TraficManager& traffic_manager = TraficManager::getInstance();
     Configuration& config = Configuration::getInstance();
+    PowerManager& pm = PowerManager::getInstance();
     static std::vector<Monitor> combined_data;
     static std::vector<Monitor> wl_data;
     static std::vector<Monitor> oebb_data;
+    static uint32_t no_data_counter = 0;
 
     combined_data.reserve(32);
     wl_data.reserve(16);
@@ -65,13 +67,31 @@ void task_data_coordinator(void* pvParameters) {
             combined_data.insert(combined_data.end(), oebb_data.begin(), oebb_data.end());
         }
         
-        // Apply global filters (e.g., hiding trains that are > 60 mins away)
-        if (!combined_data.empty()) {
+        if (combined_data.size() > 0) {
             if(traffic_manager.acquire() == pdTRUE){
+                if (no_data_counter){
+                    if(no_data_counter >= 3 && !pm.is_eco_active()){
+                        pm.get_tft().fillScreen(COLOR_BG);
+                        pm.backlight_on(config.get_brightness());
+                    }
+                    no_data_counter = 0;
+                }
                 traffic_manager.update(combined_data);
                 traffic_manager.release();
             }
             Serial.printf("[Master] Combined Update: %d monitors total.\n", combined_data.size());
+        } else {
+            no_data_counter += 1;
+            if(no_data_counter == 3){
+                if(traffic_manager.acquire() == pdTRUE){
+                    pm.get_tft().fillScreen(COLOR_BG);
+                    traffic_manager.update(combined_data);
+                    traffic_manager.release();
+                    if (!pm.is_eco_active()){
+                        pm.backlight_on(15.0);
+                    }
+                }
+            }
         }
     }
 }

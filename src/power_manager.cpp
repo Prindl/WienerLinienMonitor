@@ -239,22 +239,18 @@ bool PowerManager::is_backlight_on(){
 }
 
 void PowerManager::backlight_on(double brightness){
-    if (!is_backlight_on()) {
-        if (this->is_dimming_enabled()) {
-            backlight_dim(brightness, DEFAULT_DURATION);
-        } else {
-            digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
-        }
+    if (this->is_dimming_enabled()) {
+        backlight_dim(brightness, DEFAULT_DURATION);
+    } else {
+        digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
     }
 }
 
 void PowerManager::backlight_off(double brightness){
-    if (is_backlight_on()) {
-        if (this->is_dimming_enabled()) {
-            backlight_dim(brightness, DEFAULT_DURATION);
-        } else {
-            digitalWrite(TFT_BL, LOW);
-        }
+    if (this->is_dimming_enabled()) {
+        backlight_dim(brightness, DEFAULT_DURATION);
+    } else {
+        digitalWrite(TFT_BL, LOW);
     }
 }
 
