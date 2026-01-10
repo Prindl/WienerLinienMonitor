@@ -1,11 +1,12 @@
 #include "colors.h"
+#include "config.h"
 #include "network_manager.h"
 #include "power_manager.h"
 #include "resources.h"
 #include "screen.h"
 
 
-PowerManager::PowerManager() : task_screen(nullptr), bl_pwm_channel(0), use_bl_pwm(false), _is_portal_active(false) {
+PowerManager::PowerManager() : task_screen(nullptr), task_reconfigure(nullptr), bl_pwm_channel(0), use_bl_pwm(false), _is_portal_active(false) {
 
 }
 
@@ -15,6 +16,7 @@ PowerManager& PowerManager::getInstance() {
 }
 
 void PowerManager::configure_wifi_manager() {
+    Configuration& config = Configuration::getInstance();
     static String prompt_eco = StringDatabase::GetPowerModePrompt();
     static String val_eco    = String(config.get_eco_mode());
     
@@ -59,6 +61,7 @@ void PowerManager::configure_wifi_manager() {
 }
 
 void PowerManager::save_wfi_manager_parameters(WiFiManager& wifi_manager){
+    Configuration& config = Configuration::getInstance();
     WiFiManagerParameter** parameters = wifi_manager.getParameters();
     for(int i=0; i< wifi_manager.getParametersCount(); i++) {
         WiFiManagerParameter& parameter = *(parameters[i]);
@@ -84,7 +87,7 @@ void PowerManager::setup() {
 
     if (WiFi.psk().length() == 0) {
         this->_tft.fillScreen(COLOR_BG);
-        this->_tft.setCursor(0, 0, config.settings.instruction_font_size);
+        this->_tft.setCursor(0, 0, INSTRUCTION_FONT_SIZE);
         this->_tft.setTextColor(COLOR_TEXT_YELLOW, COLOR_BG);
         this->_tft.println("Setup Mode Active");
         this->_tft.println("------------------");
@@ -137,7 +140,7 @@ void PowerManager::reconfigure() {
     Screen& screen = Screen::getInstance();
     // wifi_manager.setSaveConfigCallback([this]() {
     wifi_manager.setSaveParamsCallback([this]() {
-        Serial.println("Settings saved by user!");
+        Serial.println(F("Settings saved by user!"));
         this->deactivate_portal();
     });
     // This starts the "Config Portal" on the current IP address
@@ -147,7 +150,7 @@ void PowerManager::reconfigure() {
         this->task_suspend();
 
         this->_tft.fillScreen(COLOR_BG);
-        this->_tft.setCursor(0, 0, config.settings.instruction_font_size);
+        this->_tft.setCursor(0, 0, INSTRUCTION_FONT_SIZE);
         this->_tft.setTextColor(COLOR_TEXT_YELLOW, COLOR_BG);
         this->_tft.println("Config Mode Active");
         this->_tft.println("------------------");
@@ -306,6 +309,7 @@ void PowerManager::display_off() {
 }
 
 void PowerManager::display_on() {
+    Configuration& config = Configuration::getInstance();
     backlight_on(config.get_brightness());
 }
 
@@ -325,7 +329,7 @@ void PowerManager::bluetooth_stop() {
 }
 
 bool PowerManager::wifi_start() {
-    Serial.print("Reconnecting WiFi");
+    Serial.print(F("Reconnecting WiFi"));
     WiFi.mode(WIFI_STA);
     WiFi.begin(); 
     int attempt = 0;
@@ -367,11 +371,13 @@ void PowerManager::task_resume(){
 }
 
 bool PowerManager::is_eco_active() {
+    Configuration& config = Configuration::getInstance();
     EcoModeState eco_state = config.get_eco_mode_state();
     return eco_state == ECO_ON || eco_state == ECO_AUTOMATIC_ON;
 }
 
 void PowerManager::eco_mode_on() {
+    Configuration& config = Configuration::getInstance();
     switch (config.get_eco_mode())
     {
         case ECO_HEAVY:
@@ -394,6 +400,7 @@ void PowerManager::eco_mode_on() {
 }
 
 void PowerManager::eco_mode_off() {
+    Configuration& config = Configuration::getInstance();
     switch (config.get_eco_mode())
     {
         case ECO_HEAVY:
@@ -416,6 +423,7 @@ void PowerManager::eco_mode_off() {
 }
 
 void PowerManager::task_config_portal(void *pvParameters) {
+    Configuration& config = Configuration::getInstance();
     PowerManager* pm = (PowerManager*)pvParameters;
 
     while(true) {
@@ -423,7 +431,7 @@ void PowerManager::task_config_portal(void *pvParameters) {
         // This uses 0% CPU while waiting
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        Serial.println("Config Task: Starting Portal...");
+        Serial.println(F("Config Task: Starting Portal..."));
 
         if (pm->is_eco_active()){
             if(config.get_eco_mode() == ECO_HEAVY) {

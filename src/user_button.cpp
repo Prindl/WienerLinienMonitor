@@ -1,6 +1,7 @@
+#include "config.h"
 #include "user_button.h"
 
-Button::Button(ButtonTaskConfig button_cfg, uint8_t mode) : config(button_cfg)
+Button::Button(ButtonTaskConfig& button_cfg, uint8_t mode) : config(button_cfg)
 {
     pinMode(config.pin, mode);
     if(config.isr != nullptr){
@@ -36,7 +37,7 @@ void Button::handle_presses() {
                         // Wait for user to let go so we don't trigger again
                         while(this->is_pressed()) vTaskDelay(10);
                         if (this->config.interrupt_handler_long) {
-                            this->config.interrupt_handler_long(app_config, millis() - press_start);
+                            this->config.interrupt_handler_long(millis() - press_start);
                         }
                         wait_for_double_press = false; // Cancel any pending double click
                         goto loop_end; 
@@ -48,7 +49,7 @@ void Button::handle_presses() {
                 if (millis() - press_start > 50) { // Debounce check
                     if (wait_for_double_press) {
                         if (this->config.interrupt_handler_double) {
-                            this->config.interrupt_handler_double(app_config);
+                            this->config.interrupt_handler_double();
                         }
                         wait_for_double_press = false;
                     } else {
@@ -62,7 +63,7 @@ void Button::handle_presses() {
             // xSemaphoreTake returned pdFALSE because TIMEOUT_SHORT_PRESS passed without a second press.
             if (wait_for_double_press) {
                 if (this->config.interrupt_handler_short) {
-                    this->config.interrupt_handler_short(app_config);
+                    this->config.interrupt_handler_short();
                 }
                 wait_for_double_press = false;
             }

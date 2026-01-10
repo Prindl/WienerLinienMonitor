@@ -3,10 +3,6 @@
 
 #include <map>
 
-#include "config.h"
-
-extern Configuration config;
-
 template<typename T> std::vector<T> cyclicSubset(const std::vector<T>& input, size_t N, size_t start);
 
 struct Vehicle {
@@ -16,7 +12,7 @@ struct Vehicle {
     int countdown;
     bool is_barrier_free;
     bool has_folding_ramp;
-    bool is_canceled;
+    bool is_cancelled;
     bool is_airport;
 };
 
@@ -95,9 +91,6 @@ class TraficManager {
         SemaphoreHandle_t internal_mutex;
         int shift_cnt;
         int countdown_idx;
-        // unsigned long previousMillisTraficSet;
-        // unsigned long previousMillisCountDown;
-        // const int INTERVAL_UPDATE = config.settings.data_update_task_delay;
         TrafficClock* p_trafic_clock;
         long prev_iterations = 0;
 

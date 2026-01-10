@@ -1,4 +1,4 @@
-#include "network_manager.h"
+#include <Arduino.h>
 
 #include "network_manager.h"
 
@@ -9,9 +9,6 @@ NetworkManager& NetworkManager::getInstance() {
 
 NetworkManager::NetworkManager() {
     this->internal_mutex = xSemaphoreCreateMutex();
-    if (this->internal_mutex == NULL) {
-        Serial.println("[NetworkManager] Error: Could not create Mutex!");
-    }
 }
 
 BaseType_t NetworkManager::acquire() {

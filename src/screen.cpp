@@ -1,15 +1,16 @@
 #include "colors.h"
+#include "config.h"
 #include "power_manager.h"
 #include "screen.h"
 
 Screen& Screen::getInstance(){
     PowerManager& pm = PowerManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     static Screen instance(pm.get_tft(), config.get_number_lines());
     return instance;
 }
 
-const unsigned char airplaneBitmap[] PROGMEM = {
-    0x00, 0x00, 0x00, // ........................
+const unsigned char airplane_bitmap[] PROGMEM = {
     0x00, 0x18, 0x00, // ...........##...........
     0x00, 0x3c, 0x00, // ..........####..........
     0x00, 0x3c, 0x00, // ..........####..........
@@ -31,9 +32,58 @@ const unsigned char airplaneBitmap[] PROGMEM = {
     0x01, 0xe7, 0x80, // .......####...###.......
     0x03, 0x83, 0xc0, // ......###......###......
     0x07, 0x00, 0xe0, // .....###........###.....
+};
+
+const uint8_t wheelchair_bitmap[] PROGMEM = {
+    0x00, 0xe0, 0x00, // ........###.............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x00, 0xe0, 0x00, // ........###.............
+    0x00, 0x40, 0x00, // .........#..............
+    0x00, 0x00, 0x00, // .........##########.....
+    0x00, 0x7f, 0xe0, // .........#..............
+    0x00, 0x40, 0x00, // .........#..............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x02, 0x48, 0x00, // ......#..#..#...........
+    0x04, 0x37, 0x00, // .....#...######.........
+    0x08, 0x03, 0x00, // ....#.........##........
+    0x10, 0xe1, 0x00, // ...#....###....#........
+    0x11, 0xf1, 0x80, // ...#...#####...##.......
+    0x11, 0xf1, 0x80, // ...#...#####...##.......
+    0x11, 0xf1, 0x40, // ...#...#####...#.#......
+    0x10, 0xe1, 0x20, // ...#....###....#..#.....
+    0x08, 0x02, 0x10, // ....#.........#....#....
+    0x04, 0x04, 0x08, // .....#.......#......#...
+    0x02, 0x08, 0x00, // ......#.....#...........
+    0x01, 0xf0, 0x00, // .......#####............
     0x00, 0x00, 0x00, // ........................
-    0x00, 0x00, 0x00, // ........................
-    0x00, 0x00, 0x00  // ........................
+};
+
+const uint8_t wheelchair_line_bitmap[] PROGMEM = {
+    0x00, 0xe0, 0x00, // ........###.............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x00, 0xe0, 0x00, // ........###.............
+    0x00, 0x40, 0x00, // .........#..............
+    0x00, 0x00, 0x00, // .........##########.....
+    0x00, 0x7f, 0xe0, // .........#..............
+    0x00, 0x40, 0x00, // .........#..............
+    0x01, 0xf0, 0x00, // .......#####............
+    0x02, 0x48, 0x00, // ......#..#..#...........
+    0x04, 0x37, 0x00, // .....#...######.........
+    0x08, 0x03, 0x00, // ....#.........##........
+    0x10, 0xe1, 0x00, // ...#....###....#........
+    0x11, 0xf1, 0x80, // ...#...#####...##.......
+    0x11, 0xf1, 0x80, // ...#...#####...##.......
+    0x11, 0xf1, 0x40, // ...#...#####...#.#......
+    0x10, 0xe1, 0x20, // ...#....###....#..#.....
+    0x08, 0x02, 0x10, // ....#.........#....#....
+    0x04, 0x04, 0x08, // .....#.......#......#...
+    0x02, 0x08, 0x00, // ......#.....#...........
+    0x01, 0xf0, 0x00, // .......#####............
+    0x1f, 0xff, 0xf8, // ...##################...
 };
 
 Screen::Screen(TFT_eSPI& tft, int cnt_rows)
@@ -47,9 +97,6 @@ Screen::Screen(TFT_eSPI& tft, int cnt_rows)
   px_min_text_sprite(std::numeric_limits<int>::max()) {
     SetRowCount(cnt_rows);
     this->internal_mutex = xSemaphoreCreateMutex();
-    if (this->internal_mutex == NULL) {
-        Serial.println("[ScreenManager] Error: Could not create Mutex!");
-    }
 }
 
 BaseType_t Screen::acquire() {
@@ -114,7 +161,7 @@ void Screen::DrawRow(const ScreenEntity& monitor, int idx_row) {
     drawLines();
 }
 
-String Screen::ConvertGermanToLatin(String input) {
+String Screen::ConvertGermanToLatin(const String& input) {
     String output;
     output.reserve(input.length());
     for (int i = 0; i < input.length(); ++i) {
@@ -169,7 +216,7 @@ void Screen::DrawCenteredText(const String& text){
     }
     if (px_full_string > px_width) {
         //scroll text 2 is mean px per frame
-        vec_scroll_cord[0] -= config.settings.scrollrate;
+        vec_scroll_cord[0] -= SCROLLRATE;
         if (!is_init_cords[0] && text.length()) {
             // Scroll if text is bigger than available space
             vec_scroll_cord[0] = sprite.width();
@@ -212,68 +259,9 @@ void Screen::DrawName(const String& name, int row, const GFXfont* pFont) const {
     DrawTextOnSprite(name, row, dxNameMargin_px, 0, pFont, GetMaxNameTextWidth_px());
 }
 
-inline void Screen::drawThickLine(TFT_eSprite &s, int x0, int y0, int x1, int y1, int thickness, uint16_t color) {
-    // Simple thick line: draw many parallel offset lines (cheap and looks fine at small thickness)
-    int half = thickness / 2;
-    for (int ox = -half; ox <= half; ++ox) {
-        for (int oy = -half; oy <= half; ++oy) {
-            s.drawLine(x0 + ox, y0 + oy, x1 + ox, y1 + oy, color);
-        }
-    }
-}
-
-void Screen::drawWheelchairIcon(TFT_eSprite &s, int x, int y, int size, uint16_t color, bool has_underline) {
-    // Reference design is 24x24 units
-    const float R = size / 24.0f;
-    auto X = [&](float vx){ return x + (int)roundf(vx * R); };
-    auto Y = [&](float vy){ return y + (int)roundf(vy * R); };
-
-    // thickness scaled (in pixels)
-    int stroke = (int)max(1.0f, floorf(R * 0.9f)); // 1..3 typically
-
-    // --- Head (filled circle) ---
-    int hx = X(9.0f);
-    int hy = Y(3.0f);
-    int hr = max(1, (int)roundf(2.0f * R));
-    s.fillCircle(hx, hy, hr, color);
-
-    // --- Seat / backrest / frame (thick lines) ---
-    // Back support: (9,6) down to (9,12)
-    drawThickLine(s, X(9.0f), Y(6.0f), X(9.0f), Y(12.0f), stroke, color);
-
-    // Top seat bar: (9,6) to (14,6)
-    drawThickLine(s, X(9.0f), Y(7.0f), X(18.0f), Y(7.0f), stroke, color);
-
-    // Seat front: (9,12) to (14,12)
-    drawThickLine(s, X(9.0f), Y(12.0f), X(14.0f), Y(12.0f), stroke, color);
-
-    // Frame diagonal / leg: (14,12) to (17,17)
-    drawThickLine(s, X(14.0f), Y(12.0f), X(17.0f), Y(17.0f), stroke, color);
-
-    // --- Wheel (thick ring) ---
-    // Outer ring
-    int wheel_cx = X(9.0f);
-    int wheel_cy = Y(16.0f);
-    int wheel_r = max(1, (int)roundf(6.0f * R));
-    // Draw thicker ring by drawing several concentric circles
-    for (int rr = 0; rr < stroke; ++rr) {
-        s.drawCircle(wheel_cx, wheel_cy, wheel_r - rr, color);
-    }
-    // Hub (small filled circle)
-    int hub_r = max(1, (int)roundf(2.0f * R));
-    s.fillCircle(wheel_cx, wheel_cy, hub_r, color);
-
-    // --- Foot / front support line (optional for realism) ---
-    drawThickLine(s, X(17.0f), Y(17.0f), X(20.0f), Y(20.0f), stroke, color);
-    if (has_underline){
-        drawThickLine(s, X(3.0f), Y(23.0f), X(20.0f), Y(23.0f), stroke, color);
-    }
-}
-
 void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_barrier_free, bool has_folding_ramp, bool is_airport, int idx_row) {
 
     const GFXfont* p_font = &FreeSansBold12pt7b;
-
     // Calculate dimensions
     auto& vec_scroll_cord = vec_scrolls_coords[idx_row];
     auto& is_init_cords = vec_init_scrolls_coords[idx_row];
@@ -286,7 +274,7 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
     // 4 is count margin around Coundown and Stop code
     int px_width = _tft.width() - px_width_countdown - px_width_stopcode - px_margin * 4;
     if (px_width <= 0 || px_height_font <= 0) {
-        Serial.println("Sprite dimensions invalid!");
+        Serial.println(F("Sprite dimensions invalid!"));
         return;
     }
 
@@ -297,6 +285,8 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
     TFT_eSprite sprite(&_tft);
     sprite.createSprite(px_width, px_height_font);
 
+    constexpr int px_wheelchair = 23;
+    constexpr int px_airplane = 24;
     int cnt_lines_actual = static_cast<int>(vec_text_lines.size());
     for (int i = 0; i < std::min(number_text_lines, cnt_lines_actual); ++i) {
         bool draw_wheelchair = i == 0 && is_barrier_free;
@@ -306,13 +296,10 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
         int dy = CalculateLineDistance_px(px_height_full, px_margin_lines, px_height_font, number_text_lines, i);
         int px_full_text = CalculateFontWidth_px(p_font, vec_text_lines[i].c_str());
         int px_full_string = px_full_text;
-        int px_wheelchair = px_height_font;
-        int px_airplane = 24;
         if (draw_wheelchair){
-            px_full_string += px_height_font + 2; //add more space
-        }
-        if (draw_airplane){
-            px_full_string += px_airplane + 2;
+            px_full_string += px_wheelchair;
+        } else if (draw_airplane){
+            px_full_string += px_airplane + 3;
         }
 
         // Reset to the right edge of the screen
@@ -326,7 +313,7 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
                         vec_scroll_ts[i] = now;
                         vec_scroll_cord[i] = 0;//sprite.width()
                     }
-                    if (now - vec_scroll_ts[i] >= config.settings.delay_scroll) {
+                    if (now - vec_scroll_ts[i] >= DELAY_SCROLL) {
                         vec_scroll_state[i] = SCROLLING;
                     }
                 } else {
@@ -337,14 +324,14 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
             case SCROLLING:
                 if (do_scrolling) {
                     //scroll text 2 is mean px per frame
-                    vec_scroll_cord[i] -= config.settings.scrollrate;
+                    vec_scroll_cord[i] -= SCROLLRATE;
                     if (i > 0 && !is_init_cords[i] && vec_text_lines[i].length()) {
                         // Scroll if text is bigger than available space
                         vec_scroll_cord[i] = 0;//sprite.width();
                         is_init_cords[i] = true;
                     }
                 } else if (px_full_text < vec_scroll_cord[i]) {
-                    // reset sscrolls cord
+                    // reset scrolls cord
                     vec_scroll_cord[i] = 0;
                     is_init_cords[i] = false;
                 }
@@ -357,7 +344,7 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
 
             case WAIT_AFTER:
                 if (do_scrolling) {
-                    if (now - vec_scroll_ts[i] >= config.settings.delay_scroll) {
+                    if (now - vec_scroll_ts[i] >= DELAY_SCROLL) {
                         // reset scroll coordinates
                         vec_scroll_cord[i] = 0; //sprite.width()
                         vec_scroll_state[i] = WAIT_BEFORE;
@@ -376,18 +363,21 @@ void Screen::DrawMiddleText(const std::vector<String>& vec_text_lines, bool is_b
         sprite.drawString(vec_text_lines[i].c_str(), vec_scroll_cord[i], 0);
 
         if (draw_wheelchair) {
-            int px_icon_length = px_wheelchair;
-            if(draw_airplane){
-                px_icon_length += px_airplane;
-            }
-            drawWheelchairIcon(sprite, px_full_string - px_icon_length + vec_scroll_cord[i], i*px_height_font, px_height_font, COLOR_TEXT_YELLOW, has_folding_ramp);
-        }
-        if (draw_airplane) {
-            int px_icon_length = px_airplane;
-            if(draw_wheelchair){
-                px_icon_length += px_wheelchair;
-            }
-            sprite.drawBitmap(px_full_string - px_icon_length + vec_scroll_cord[i], 0, airplaneBitmap, 24, 24, COLOR_TEXT_YELLOW, COLOR_BG);
+            sprite.drawBitmap(
+                px_full_string - px_wheelchair + vec_scroll_cord[i],
+                0,
+                !has_folding_ramp ? wheelchair_line_bitmap : wheelchair_bitmap,
+                px_wheelchair, 22,
+                COLOR_TEXT_YELLOW, COLOR_BG
+            );
+        } else if (draw_airplane) {
+            sprite.drawBitmap(
+                px_full_string - px_airplane + vec_scroll_cord[i],
+                0,
+                airplane_bitmap,
+                px_airplane, 20,
+                COLOR_TEXT_YELLOW, COLOR_BG
+            );
         }
 
         // Push sprite to display

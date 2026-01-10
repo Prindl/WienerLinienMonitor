@@ -6,14 +6,11 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <WebSocketsClient.h> // Library: WebSockets by Markus Sattler
-
 #include "json.h"
+
 #include "traffic.h"
-#include "network_manager.h"
 
 #define URL_OEBB "https://meine.oebb.at/abfahrtankunft/api/evaNrs/"
-
-extern Configuration config;
 
 class OEBBDeparture {
     private:
@@ -33,6 +30,8 @@ class OEBBDeparture {
 
         void fill_monitors_from_json(JsonDocument& root);
 
+        void handle_deserialisation_error(DeserializationError& error);
+        
     public:
         explicit OEBBDeparture();
 

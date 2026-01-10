@@ -5,10 +5,6 @@
 #include <WiFiManager.h>
 #include <TFT_eSPI.h>  // by Bodmer 2.5.43, user config 206
 
-#include "esp_timer.h"
-
-#include "config.h"
-
 #define DEFAULT_DURATION 300
 #define DEFAULT_PWM_FREQUENCY 5000
 #define DEFAULT_PWM_RESOLUTION 8
@@ -20,8 +16,6 @@
 #define PARAM_ID_EVA "eva"
 #define PARAM_ID_FILTER_EVA "filter_eva"
 #define PARAM_ID_COUNT "lines_count"
-
-extern Configuration config;
 
 extern void task_screen_update(void* pvParameters);
 class PowerManager {

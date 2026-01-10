@@ -1,8 +1,6 @@
 #ifndef __USER_BUTTON_H__
 #define __USER_BUTTON_H__
 
-#include "config.h"
-
 #define TIMEOUT_LONG_PRESS (800)
 #define TIMEOUT_SHORT_PRESS (250)
 
@@ -11,9 +9,9 @@ struct ButtonTaskConfig {
     Configuration* config;
     SemaphoreHandle_t semaphore;
     void (*isr)();
-    void (*interrupt_handler_short)(Configuration& config);
-    void (*interrupt_handler_long)(Configuration& config, unsigned long time_pressed);
-    void (*interrupt_handler_double)(Configuration& config);
+    void (*interrupt_handler_short)();
+    void (*interrupt_handler_long)(unsigned long time_pressed);
+    void (*interrupt_handler_double)();
 };
 
 extern ButtonTaskConfig button_1_cfg;
@@ -24,7 +22,7 @@ void IRAM_ATTR handle_button_2_interrupt();
 
 class Button {
     public:
-        Button(ButtonTaskConfig config, uint8_t mode = INPUT_PULLUP);
+        Button(ButtonTaskConfig& config, uint8_t mode = INPUT_PULLUP);
 
         int read();
 

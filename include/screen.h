@@ -4,11 +4,6 @@
 #include <map>
 #include <vector>
 #include <TFT_eSPI.h>  // by Bodmer 2.5.43, user config 206
-
-#include "config.h"
-
-extern Configuration config;
-
 struct ScreenEntity {
   String right_txt;  // Line name 2, 72, D etc.
   String left_txt;
@@ -30,7 +25,6 @@ enum ScrollState { WAIT_BEFORE, SCROLLING, WAIT_AFTER };
  */
 class Screen {
     public:
-
         static Screen& getInstance();
 
         // Delete copy constructor and assignment operator
@@ -74,7 +68,7 @@ class Screen {
        *
        * @return The converted string in Latin alphabet.
        */
-       static String ConvertGermanToLatin(String input);
+       static String ConvertGermanToLatin(const String& input);
 
        int GetNumberRows();
 

@@ -1,5 +1,30 @@
+#include "config.h"
+#include "network_manager.h"
 #include "oebb.h"
 #include "screen.h"
+
+void OEBBDeparture::handle_deserialisation_error(DeserializationError& error) {
+    switch (error.code())
+    {
+        case DeserializationError::Code::InvalidInput:
+            // Stream parsing fails
+            Serial.printf("JSON parsing error: %S\n", error.c_str());
+            break;
+        case DeserializationError::Code::NoMemory:
+            // Not enough memory to parse - restarting
+            Serial.println(F("Not enough memory to deserialise the json from OEBB API"));
+            delay(ERROR_RESET_DELAY);
+            if(this->is_connected()){
+                this->web_socket.disconnect();
+            }
+            ESP.restart();
+            break;
+            
+        default:
+            Serial.printf("JSON parsing error: %S\n", error.c_str());
+            break;
+    }
+}
 
 void OEBBDeparture::task_traffic(void *pvParameters) {
     OEBBDeparture* instance = (OEBBDeparture*)pvParameters;
@@ -42,12 +67,11 @@ void OEBBDeparture::event(WStype_t type, uint8_t * payload, size_t length) {
     if(type == WStype_TEXT){
         if(network.acquire() == pdTRUE){
             JsonDocument data;
-            // Serial.printf("[WS] Live Update: %s\n", payload);
             DeserializationError error = deserializeJson(
                 data, payload, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(10)
             );
             if (error) {
-                Serial.printf("JSON parsing error: %S\n", error.c_str());
+                handle_deserialisation_error(error);
             } else if (data["method"].as<String>() == "update") {
                 // Send response to server
                 JsonDocument response;
@@ -62,38 +86,41 @@ void OEBBDeparture::event(WStype_t type, uint8_t * payload, size_t length) {
                     this->monitors.clear();
                     this->fill_monitors_from_json(data);
                     this->monitors.shrink_to_fit();
+                    Serial.printf("Merged into %d monitors.\n", this->monitors.size());
                     xSemaphoreGive(this->internal_mutex);
                     // Notify data coordinator of data update
                     xTaskNotifyGive(this->notification);
                 }
-                Serial.printf("Received %d monitor from OEBB API.\n", this->monitors.size());
             }
             network.release();
         }
     } else if(type == WStype_CONNECTED){
-        Serial.printf("[WS] Connected. Protocol Switched.\n");
+        Serial.println(F("[WS] Connected. Protocol Switched."));
     } else if(type == WStype_DISCONNECTED){
         if(payload){
             Serial.printf("[WS] Disconnected: %s\n", payload);
         } else {
-            Serial.printf("[WS] Disconnected.\n");
+            Serial.println(F("[WS] Disconnected."));
         }
     } else if(type == WStype_ERROR){
-        Serial.printf("[WS] Error.\n");
+        Serial.printf("[WS] Error: %s\n", payload);
     }
 }
 
 void OEBBDeparture::get_station() {
     NetworkManager& network = NetworkManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     const String& eva = config.get_eva();
-    char url[100] = URL_OEBB;
+    int eva_length = eva.length();
+    char url[60] = URL_OEBB;
     const int pos = strlen(url);
-    if(eva.length() > 0){
+    if(eva_length){
         if (network.acquire() == pdTRUE) {
             HTTPClient https;
-            for(int i=pos; i<pos+eva.length(); i++){
+            for(int i = pos; i<pos+eva_length; i++){
                 url[i] = eva[i-pos];
             }
+            url[pos+eva_length] = '\0';
             Serial.printf("Fetching: %s\n", url);
 
             https.begin(url);
@@ -102,12 +129,10 @@ void OEBBDeparture::get_station() {
             int http_code = https.GET();
 
             if (http_code == HTTP_CODE_OK) {
-                WiFiClient& stream = https.getStream();
-                // String payload = https.getString();
                 JsonDocument root;
-                DeserializationError error = deserializeJson(root, stream);
+                DeserializationError error = deserializeJson(root, https.getStream());
                 if (error) {
-                    Serial.printf("JSON parsing error: %S\n", error.c_str());
+                    handle_deserialisation_error(error);
                 } else {
                     if (!root["name"].isNull()){
                         this->station_name = root["name"].as<String>();
@@ -139,6 +164,7 @@ void OEBBDeparture::get_station() {
 
 void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
     if (root["params"].isNull()) return;
+    Configuration& config = Configuration::getInstance();
     struct tm today;
     if(!getLocalTime(&today)){
         Serial.print("Couldn't get the correct time.");
@@ -165,6 +191,7 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
     }
 
     if (!departures.isNull()) {
+        Serial.printf("Received %d monitor from OEBB API.\n", departures.size());
         for (const auto& departure : departures) {
             String line_name = departure["line"].as<String>();
             bool filter_match = filters.empty();
@@ -178,22 +205,15 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
                 continue;
             }
             const JsonObject dst = departure["destination"];
-            String towards = Screen::ConvertGermanToLatin(dst["default"].as<String>());
             // const JsonObject via = departure["via"];
             // String via_txt = Screen::ConvertGermanToLatin(via["default"].as<String>());
             // via_txt.replace("&#8203;", "");
             String stop = this->station_name + ": Platform " + departure["track"].as<String>();
-            time_t scheduled;
-            if(!departure["expected"].isNull()) {
-                scheduled = departure["expected"].as<time_t>();
-            } else {
-                scheduled = departure["scheduled"].as<time_t>();
-            }
             Monitor* monitor_p = findMonitor(this->monitors, line_name, stop);
             Monitor monitor;
             monitor.line = line_name;
             monitor.stop = stop;
-            monitor.towards = towards;
+            monitor.towards = Screen::ConvertGermanToLatin(dst["default"].as<String>());
             monitor.is_barrier_free = false;
             // Add special notices
             // struct TrafficInfo traffic_info;
@@ -204,26 +224,32 @@ void OEBBDeparture::fill_monitors_from_json(JsonDocument& root) {
             // } else {
             //     monitor.traffic_info = traffic_info;
             // }
-
+                    
             Vehicle vehicle;
+            time_t scheduled;
+            if(!departure["expected"].isNull()) {
+                scheduled = departure["expected"].as<time_t>();
+            } else {
+                scheduled = departure["scheduled"].as<time_t>();
+            }
             vehicle.countdown = static_cast<int>(difftime(scheduled, now) / 60);
             vehicle.line = monitor.line;
             vehicle.towards = monitor.towards;
             vehicle.is_barrier_free = monitor.is_barrier_free;
             vehicle.has_folding_ramp = false;
-            vehicle.is_canceled = false;
+            vehicle.is_cancelled = false;
             vehicle.is_airport = false;
             JsonArray flags = departure["flags"];
             for(JsonVariant flag : flags){
                 String f = flag.as<String>();
                 if(f == "CANCELED") {
-                    vehicle.is_canceled = true;
+                    vehicle.is_cancelled = true;
                 } else if(f == "AIRPORT") {
                     // ToDo add Airplane symbol to screen
                     vehicle.is_airport = true;
                 }
             }
-            if(vehicle.is_canceled){
+            if(vehicle.is_cancelled){
                 continue;
             }
             if (monitor_p) {
@@ -273,7 +299,7 @@ void OEBBDeparture::setup() {
             vTaskResume(this->handle_task_traffic);
         }
     } else {
-        Serial.println("Setup of OEBB departure board failed.");
+        Serial.println(F("Setup of OEBB departure board failed."));
     }
 }
 

@@ -2,6 +2,11 @@
 
 Configuration::Configuration() : ram_eco_mode(ECO_LIGHT), ram_eco_state(ECO_OFF), ram_brightness(100.0) {}
 
+Configuration& Configuration::getInstance() {
+    static Configuration instance;
+    return instance;
+}
+
 void Configuration::load() {
     // Load values into ram
     this->begin(true);

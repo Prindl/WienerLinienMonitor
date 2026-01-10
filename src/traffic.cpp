@@ -1,3 +1,4 @@
+#include "config.h"
 #include "screen.h"
 #include "traffic.h"
 
@@ -8,9 +9,6 @@ TraficManager& TraficManager::getInstance() {
 
 TraficManager::TraficManager(): shift_cnt(0), countdown_idx(0), p_trafic_clock(nullptr) {
     this->internal_mutex = xSemaphoreCreateMutex();
-    if (this->internal_mutex == NULL) {
-        Serial.println("FATAL: Could not create TraficManager Mutex");
-    }
 }
 
 Monitor* findMonitor(std::vector<Monitor>& monitors, const String& line_name, const String& stop_name) {
@@ -107,7 +105,7 @@ void TraficManager::deleteClock() {
 
 void TraficManager::createClock() {
     Screen& screen = Screen::getInstance();
-    const int& cnt_countdows = config.settings.number_countdowns;
+    const int& cnt_countdows = NUMBER_COUNTDOWNS;
     double f_size;
     if (all_trafic_set.size() == 1) {
         if (all_trafic_set[0].vehicles.size() > 2*screen.GetNumberRows()) {
@@ -122,10 +120,10 @@ void TraficManager::createClock() {
 
     long iterations_cnt = static_cast<long>(ceil(f_size / f_sceen_cells));
 
-    long iteration_ms = config.settings.data_update_task_delay / iterations_cnt;
+    long iteration_ms = DATA_UPDATE_DELAY / iterations_cnt;
     long countdown_ms = iteration_ms / cnt_countdows;
     p_trafic_clock = new TrafficClock(
-        countdown_ms + config.settings.additional_countdown_delay,
+        countdown_ms + ADDITIONAL_COUNTDOWN_DELAY,
         cnt_countdows,
         iterations_cnt
     );
@@ -171,6 +169,7 @@ void TraficManager::update(const std::vector<Monitor>& vec) {
 
 void TraficManager::updateScreen() {
     Screen& screen = Screen::getInstance();
+    Configuration& config = Configuration::getInstance();
     if (!this->has_data()) {
         screen.DrawCenteredText("No Real-Time information available.");
         return;
@@ -178,27 +177,27 @@ void TraficManager::updateScreen() {
     const int32_t number_text_lines = config.get_number_lines();
     const int trafic_set_size = static_cast<int>(all_trafic_set.size());
     // Dynamic Row adjustment of screen
+    const int num_rows_old = screen.GetNumberRows();
     if (trafic_set_size < number_text_lines) {
         if (trafic_set_size == 1) {
             if (all_trafic_set[0].vehicles.size() < number_text_lines) {
                 screen.SetRowCount(all_trafic_set[0].vehicles.size());
-                // deleteClock();
             } else {
                 screen.SetRowCount(number_text_lines);
-                // deleteClock();
             }
         } else {
             screen.SetRowCount(trafic_set_size);
-            // deleteClock();
         }
     } else {
         screen.SetRowCount(number_text_lines);
-        // deleteClock();
     }
     const int cnt_screen_rows = screen.GetNumberRows();
     int rows_in_screen_cnt = std::min(cnt_screen_rows, trafic_set_size);
     auto currentTraficSubset = cyclicSubset(all_trafic_set, rows_in_screen_cnt, shift_cnt);
-
+    if(num_rows_old != cnt_screen_rows){
+        deleteClock();
+        createClock();
+    }
     sortTrafic(currentTraficSubset);
 
     if (!hasClock()) {

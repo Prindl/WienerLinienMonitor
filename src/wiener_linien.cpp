@@ -1,22 +1,25 @@
+#include "config.h"
+#include "network_manager.h"
 #include "screen.h"
 #include "wiener_linien.h"
 
-String WLDeparture::fix_json(String word) {
-    word = Screen::ConvertGermanToLatin(word);
+String WLDeparture::fix_json(const String& word) {
+    String new_word = Screen::ConvertGermanToLatin(word);
     // Check if the input string contains spaces
-    word.trim();
-    if (word.length() > 1 && word.indexOf(' ') == -1 && word.indexOf('-') == -1) {
-        word[0] = toupper(word[0]);  // Convert the first letter to uppercase
-        for (int i = 1; i < word.length(); i++) {
-            word[i] = tolower(word[i]);  // Convert all letters to lowercase
+    new_word.trim();
+    if (new_word.length() > 1 && new_word.indexOf(' ') == -1 && new_word.indexOf('-') == -1) {
+        new_word[0] = toupper(new_word[0]);  // Convert the first letter to uppercase
+        for (int i = 1; i < new_word.length(); i++) {
+            new_word[i] = tolower(new_word[i]);  // Convert all letters to lowercase
         }
     }
-  return word;
+  return new_word;
 }
 
 void WLDeparture::task_update(void * pvParameters) {
     WLDeparture* instance = (WLDeparture*)pvParameters;
     NetworkManager& network = NetworkManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     JsonDocument filter;
     // To filter the huge json WL is providing
     if(filter["data"].isNull()){
@@ -47,27 +50,31 @@ void WLDeparture::task_update(void * pvParameters) {
         filter_trafficInfos["description"] = true;
         filter_trafficInfos["relatedLines"] = true;
     }    
-    char url[100] = URL_WIENER_LINIEN;
+    char url[140] = URL_WIENER_LINIEN; // 11 RBLs reserved
     const int pos = strlen(url);
+    // To switch away from stream parsing if it fails
+    bool use_stream_parsing = true;
     while(true) {
         // 1. SLEEP: Wait indefinitely for the Timer to notify this task
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if(network.acquire() == pdTRUE) {
             HTTPClient https;
             if (WiFi.status() != WL_CONNECTED) {
-                Serial.println("Couldn't fetch data - WiFi not connected.");
+                Serial.println(F("Couldn't fetch data - WiFi not connected."));
                 network.release();
                 continue;
             }
             const String& rbl = config.get_rbl();
-            if(rbl.isEmpty()){
-                Serial.println("Couldn't fetch data - no RBL specified.");
+            int rbl_length = rbl.length();
+            if(!rbl_length){
+                Serial.println(F("Couldn't fetch data - no RBL specified."));
                 network.release();
                 continue;
             }
-            for(int i=pos; i<pos+rbl.length(); i++){
+            for(int i = pos; i<pos+rbl_length; i++){
                 url[i] = rbl[i-pos];
             }
+            url[pos+rbl_length] = '\0';
             Serial.printf("Fetching: %s\n", url);
 
             // Start the HTTP request, reuse the SSL connection to avaoid failure because of heap fragmentation
@@ -78,17 +85,40 @@ void WLDeparture::task_update(void * pvParameters) {
             if (http_code == HTTP_CODE_OK) {
                 JsonDocument root;
                 // Stream parsing does not always work :/ (very large JSON this fails)
-                // WiFiClient& payload = https.getStream();
-                String payload = https.getString();
-                DeserializationError error = deserializeJson(
-                    root,
-                    payload,
-                    DeserializationOption::Filter(filter),
-                    DeserializationOption::NestingLimit(16)
-                );
+                DeserializationError error;
+                if(use_stream_parsing){
+                    error = deserializeJson(
+                        root,
+                        https.getStream(),
+                        DeserializationOption::Filter(filter),
+                        DeserializationOption::NestingLimit(16)
+                    );
+                } else {
+                    error = deserializeJson(
+                        root,
+                        https.getString(),
+                        DeserializationOption::Filter(filter),
+                        DeserializationOption::NestingLimit(16)
+                    );
+                }
                 if (error) {
                     Serial.printf("JSON parsing error: %S\n", error.c_str());
-                    delay(config.settings.error_reset_delay);
+                    switch (error.code())
+                    {
+                        case DeserializationError::Code::InvalidInput:
+                            // The first time Stream parsing fails, switch to String
+                            use_stream_parsing = false;
+                            break;
+                        case DeserializationError::Code::NoMemory:
+                            // Not enough memory to parse - restarting
+                            Serial.println(F("Not enough memory to deserialise the json from WienerLinien API"));
+                            delay(ERROR_RESET_DELAY);
+                            ESP.restart();
+                            break;
+                        
+                        default:
+                            break;
+                    }
                 } else if (xSemaphoreTake(instance->internal_mutex, portMAX_DELAY) == pdTRUE) {
                     instance->monitors.clear();
                     instance->fill_monitors_from_json(root);
@@ -97,7 +127,7 @@ void WLDeparture::task_update(void * pvParameters) {
                     if(instance->notification != nullptr){
                         xTaskNotifyGive(instance->notification);
                     } else {
-                        Serial.println("Data update notification skipped.");
+                        Serial.println(F("Data update notification skipped."));
                     }
                     Serial.printf("Merged into %ld monitors.\n", instance->monitors.size());
                 }
@@ -128,6 +158,7 @@ void WLDeparture::callback_timer_update(TimerHandle_t xTimer) {
 
 void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
     if (root["data"].isNull()) return;
+    Configuration& config = Configuration::getInstance();
     const JsonObject data = root["data"];
     std::vector<TrafficInfo> traffic_infos;
     const JsonArray json_traffic_infos = data["trafficInfos"];
@@ -211,7 +242,7 @@ void WLDeparture::fill_monitors_from_json(JsonDocument& root) {
                         const JsonObject departureTime = departure["departureTime"];
                         if (!departureTime.isNull()) {
                             Vehicle vehicle;
-                            vehicle.is_canceled = false;
+                            vehicle.is_cancelled = false;
                             vehicle.is_airport = false;
                             vehicle.countdown = departureTime["countdown"].as<int>();
                             const JsonObject json_vehicle = departure["vehicle"];
@@ -275,7 +306,7 @@ void WLDeparture::setup(){
     }
     this->handle_timer_update = xTimerCreate(
         "timer_update_wl",
-        pdMS_TO_TICKS(config.settings.data_update_task_delay),
+        pdMS_TO_TICKS(DATA_UPDATE_DELAY),
         pdTRUE,
         (void*)this,
         &callback_timer_update

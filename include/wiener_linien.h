@@ -6,7 +6,6 @@
 
 #include "json.h"
 #include "traffic.h"
-#include "network_manager.h"
 
 #define URL_WIENER_LINIEN "https://www.wienerlinien.at/ogd_realtime/monitor?activateTrafficInfo=stoerunglang&rbl="
 
@@ -19,7 +18,7 @@ class WLDeparture {
         TaskHandle_t notification;
         std::vector<Monitor> monitors;
     
-        String fix_json(String);
+        String fix_json(const String& word);
 
         static void task_update(void * pvParameters);
 

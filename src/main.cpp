@@ -10,6 +10,7 @@
 #include "power_manager.h"
 #include "resources.h"
 #include "screen.h"
+#include "traffic.h"
 #include "user_button.h"
 #include "wiener_linien.h"
 
@@ -20,18 +21,16 @@
 void task_data_coordinator(void* pvParameters);
 void task_screen_update(void* pvParameters);
 
-void action_dim(Configuration& config);
-void action_eco_mode(Configuration& config, unsigned long time_pressed);
-void action_reset(Configuration& config, unsigned long time_pressed);
-void action_switch_layout(Configuration& config);
-void action_reconfigure(Configuration& config);
+void action_dim();
+void action_eco_mode(unsigned long time_pressed);
+void action_reset(unsigned long time_pressed);
+void action_switch_layout();
+void action_reconfigure();
 
 void activate_eco_mode();
 void deactivate_eco_mode();
 
 /* Global Variables */
-Configuration config = Configuration();
-
 ButtonTaskConfig button_1_cfg;
 ButtonTaskConfig button_2_cfg;
 
@@ -42,6 +41,7 @@ OEBBDeparture oebb_departure = OEBBDeparture();
 
 void task_data_coordinator(void* pvParameters) {
     TraficManager& traffic_manager = TraficManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     static std::vector<Monitor> combined_data;
     static std::vector<Monitor> wl_data;
     static std::vector<Monitor> oebb_data;
@@ -80,7 +80,6 @@ void task_screen_update(void* pvParameters) {
     PowerManager& instance = PowerManager::getInstance();
     TraficManager& traffic_manager = TraficManager::getInstance();
     Screen& screen = Screen::getInstance();
-    const int delay_ms = config.settings.screen_update_task_delay;
     while (true) {
         if(!instance.is_portal_active()) {
             //Only draw if the config protal is not active
@@ -93,25 +92,27 @@ void task_screen_update(void* pvParameters) {
                 traffic_manager.release();
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        vTaskDelay(pdMS_TO_TICKS(SCREEN_UPDATE_DELAY));
     }
 }
 /* Button Action Callbacks */
 
-void action_reset(Configuration& config, unsigned long time_pressed){
+void action_reset(unsigned long time_pressed){
+    Configuration& config = Configuration::getInstance();
     WiFiManager wifi_manager;
-    if (config.settings.soft_reset_time <= time_pressed && time_pressed < config.settings.hard_reset_time) {
+    if (SOFT_RESET_TIME <= time_pressed && time_pressed < HARD_RESET_TIME) {
         wifi_manager.resetSettings();
         ESP.restart();
-    } else if (time_pressed >= config.settings.hard_reset_time){
+    } else if (time_pressed >= HARD_RESET_TIME){
         config.clear();
         wifi_manager.resetSettings();
         ESP.restart();
     }
 }
 
-void action_dim(Configuration& config){
+void action_dim(){
     PowerManager& pm = PowerManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     double brightness = config.get_brightness();
     if (25.0 < brightness && brightness <= 100.0) {
         brightness -= 25.0;
@@ -124,8 +125,9 @@ void action_dim(Configuration& config){
     }
 }
 
-void action_eco_mode(Configuration& config, unsigned long time_pressed){
+void action_eco_mode(unsigned long time_pressed){
     TraficManager& traffic_manager = TraficManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     if (time_pressed >= 1000) {
         if(traffic_manager.acquire() == pdTRUE){
             switch (config.get_eco_mode_state())
@@ -147,7 +149,8 @@ void action_eco_mode(Configuration& config, unsigned long time_pressed){
     }
 }
 
-void action_switch_layout(Configuration& config){
+void action_switch_layout(){
+    Configuration& config = Configuration::getInstance();
     int num_lines = config.get_number_lines();
     if (num_lines == LIMIT_MAX_NUMBER_LINES) {
         config.set_number_lines(LIMIT_MIN_NUMBER_LINES);
@@ -156,22 +159,24 @@ void action_switch_layout(Configuration& config){
     }
 }
 
-void action_reconfigure(Configuration& config){
+void action_reconfigure(){
     PowerManager& pm = PowerManager::getInstance();
-    // Only reconfigure when eco mode is off
-    // if(!pm.is_eco_active()){
-        if(!pm.is_portal_active()){
-            pm.notify_reconfiguration();
-        } else{
-            pm.deactivate_portal();
-        }
-    // }
+    if(!pm.is_portal_active()){
+        pm.notify_reconfiguration();
+    } else{
+        pm.deactivate_portal();
+    }
+}
+
+void action_unused(){
+    //Unused action
 }
 
 /* Eco Mode State Transitions Functions */
 
 void activate_eco_mode() {
     PowerManager& pm = PowerManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     if (config.get_eco_mode() == ECO_HEAVY && oebb_departure.is_connected()){
         oebb_departure.close();
     }
@@ -181,6 +186,7 @@ void activate_eco_mode() {
 
 void deactivate_eco_mode() {
     PowerManager& pm = PowerManager::getInstance();
+    Configuration& config = Configuration::getInstance();
     pm.eco_mode_off();
     config.set_eco_mode_state(ECO_OFF);
     if (config.get_eco_mode() == ECO_HEAVY && !oebb_departure.is_connected()){
@@ -193,6 +199,9 @@ void deactivate_eco_mode() {
  * @brief Setup function for initializing the application.
  */
 void setup() {
+    //Loading the config
+    Configuration& config = Configuration::getInstance();
+    config.load();
     // Create the PowerManager + TrafficManager Instance
     PowerManager& pm = PowerManager::getInstance();
     TraficManager& tm = TraficManager::getInstance();
@@ -203,33 +212,30 @@ void setup() {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
     if(!(chip_info.features & CHIP_FEATURE_EMB_PSRAM)) {
-        Serial.println("No embedded PSRAM available.");
+        Serial.println(F("No embedded PSRAM available."));
     }
     uint32_t psram_size = ESP.getPsramSize();
     if(psram_size > 0){
         Serial.printf("PSRAM detected, total size: %d bytes\n", psram_size);
         if (!esp_spiram_is_initialized()) {
-            Serial.printf("PSRAM not initialised!\n");
+            Serial.println(F("PSRAM not initialised!"));
         }
     }
 
-    Serial.println("Turning Bluetooth OFF...");
+    Serial.println(F("Turning Bluetooth OFF..."));
     pm.bluetooth_stop();
 
-    //Loading the config
-    config.load();
-
-    Serial.println("Init TFT...");
+    Serial.println(F("Init TFT..."));
     double brightness = config.get_brightness();
     // Start the screen with the specified brightness
     pm.begin(brightness);
 
     // Create a task for reading the reset button state
     uint8_t screen_rotation = pm.get_tft().getRotation();
-    Serial.println("Init reset actions...");
+    Serial.println(F("Init reset actions..."));
     button_2_cfg.config = &config;
     button_2_cfg.isr = (screen_rotation == 1) ? &handle_button_2_interrupt : &handle_button_1_interrupt ;
-    button_2_cfg.interrupt_handler_short = (screen_rotation == 1) ? nullptr : &action_dim;
+    button_2_cfg.interrupt_handler_short = (screen_rotation == 1) ? &action_unused : &action_dim;
     button_2_cfg.interrupt_handler_long = (screen_rotation == 1) ? &action_reset : &action_eco_mode;
     button_2_cfg.interrupt_handler_double = (screen_rotation == 1) ? &action_reconfigure : &action_switch_layout;
     button_2_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_0 : GPIO_NUM_14;
@@ -252,22 +258,25 @@ void setup() {
 
     //Sync with a time server
     TFT_eSPI& tft = pm.get_tft();
-    tft.setCursor(0, 0, config.settings.instruction_font_size);
+    tft.setCursor(0, 0, INSTRUCTION_FONT_SIZE);
     tft.setTextColor(COLOR_TEXT_YELLOW, COLOR_BG);
-    tft.println("\n\n\nTime Synchronisation...");
+    tft.println(F("\n\n\nTime Synchronisation..."));
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-    Serial.println("Waiting for NTP time sync...");
+    Serial.println(F("Waiting for NTP time sync..."));
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
-        Serial.println("Failed to obtain time");
+        Serial.println(F("Failed to obtain time"));
     } else {
-        Serial.println("Time synchronized!");
+        Serial.println(F("Time synchronized!"));
     }
 
     // Check if WiFi is successfully connected
     if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("Failed to connect to WiFi!");
-        delay(config.settings.error_reset_delay);
+        tft.fillScreen(COLOR_BG);
+        tft.setCursor(0, 0, INSTRUCTION_FONT_SIZE);
+        tft.setTextColor(COLOR_TEXT_YELLOW, COLOR_BG);
+        tft.println("\n\n\nFailed to connect to WiFi...");
+        delay(ERROR_RESET_DELAY);
         ESP.restart();  // Restart the ESP32
     }
     if (config.get_eco_mode_state() != ECO_OFF) {
@@ -283,7 +292,7 @@ void setup() {
     // Configure User Buttons
     button_1_cfg.config = &config;
     button_1_cfg.isr = (screen_rotation == 1) ? &handle_button_1_interrupt :  &handle_button_2_interrupt;
-    button_1_cfg.interrupt_handler_short = (screen_rotation == 1) ? &action_dim : nullptr;
+    button_1_cfg.interrupt_handler_short = (screen_rotation == 1) ? &action_dim : &action_unused;
     button_1_cfg.interrupt_handler_long = (screen_rotation == 1) ? &action_eco_mode : &action_reset;
     button_1_cfg.interrupt_handler_double = (screen_rotation == 1) ? &action_switch_layout : &action_reconfigure;
     button_1_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_14 : GPIO_NUM_0;

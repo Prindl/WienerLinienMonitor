@@ -20,6 +20,19 @@
 
 #define NS_SETTINGS ("Settings")
 
+#define NUMBER_COUNTDOWNS (2)
+#define SOFT_RESET_TIME (5000)
+#define HARD_RESET_TIME (30000)
+#define ERROR_RESET_DELAY (10000)
+#define REBOOT_INTERVAL_MS (86400000ULL)
+#define BUTTON_DELAY (100)
+#define DATA_UPDATE_DELAY (20000)
+#define SCREEN_UPDATE_DELAY (10)
+#define ADDITIONAL_COUNTDOWN_DELAY (50)
+#define INSTRUCTION_FONT_SIZE (4)
+#define SCROLLRATE (2)
+#define DELAY_SCROLL (1000)
+
 enum EcoMode {
    NO_ECO = 0,
    ECO_LIGHT,  // display OFF
@@ -31,34 +44,6 @@ enum EcoModeState {
    ECO_OFF = 0,
    ECO_ON,  // Eco mode was manually turned on
    ECO_AUTOMATIC_ON, // Eco mode was automatically turned on
-};
-
-struct Settings {
-  // The number queue. Indicates how many countdown shows per cycle.
-  static constexpr int number_countdowns = 2;
-  // Number of seconds to press the soft reset button to restart the device.
-  static constexpr int soft_reset_time = 5000;
-  // Number of seconds to press the hard reset button to restart the device.
-  static constexpr int hard_reset_time = 30000;
-  // Number of milliseconds to delay before resetting the device if an error.
-  static constexpr int error_reset_delay = 10 * 1000;
-  // Number of milliseconds to reset esp.
-  static constexpr uint64_t ms_reboot_interval = 24 * 60 * 60 * 1000;
-  // Number of milliseconds to delay between checking the reset button state.
-  static constexpr int button_task_delay = 100;
-  // Number of milliseconds to delay between updating the data.
-  static constexpr int data_update_task_delay = 20 * 1000;
-  // Number of milliseconds to delay between updating the screen.
-  static constexpr int screen_update_task_delay = 10;
-  // real count down can be faster thet real data_update_task_delay
-  // this offset time help meke more smoth transition
-  static constexpr int additional_countdown_delay = 50;
-  // Size of font that show in first second plug in
-  static constexpr int instruction_font_size = 4;
-  // how much pixels scroll per frame
-  static constexpr int scrollrate = 2;
-  // how long to wait before starting scrolling in ms
-  static constexpr int delay_scroll = 1000;
 };
 
 class Configuration {
@@ -78,10 +63,14 @@ class Configuration {
 
         static int32_t verify_number_lines(int32_t count);
 
-    public:
-        static struct Settings settings;
-        
         explicit Configuration();
+    public:
+        static Configuration& getInstance();
+
+        // Delete copy constructor and assignment operator
+        Configuration(const Configuration&) = delete;
+        void operator=(const Configuration&) = delete;
+
         
         void load();
         void clear();

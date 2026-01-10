@@ -1,9 +1,9 @@
 #ifndef __NETWORK_MANAGER_H__
 #define __NETWORK_MANAGER_H__
 
-#include <Arduino.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
 
 class NetworkManager {
 public:
