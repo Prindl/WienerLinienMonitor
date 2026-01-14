@@ -254,11 +254,12 @@ void setup() {
     uint8_t screen_rotation = pm.get_tft().getRotation();
     Serial.println(F("Init reset actions..."));
     button_2_cfg.config = &config;
-    button_2_cfg.isr = (screen_rotation == 1) ? &handle_button_2_interrupt : &handle_button_1_interrupt ;
+    button_2_cfg.isr = &handle_button_2_interrupt;
     button_2_cfg.interrupt_handler_short = (screen_rotation == 1) ? &action_unused : &action_dim;
     button_2_cfg.interrupt_handler_long = (screen_rotation == 1) ? &action_reset : &action_eco_mode;
     button_2_cfg.interrupt_handler_double = (screen_rotation == 1) ? &action_reconfigure : &action_switch_layout;
-    button_2_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_0 : GPIO_NUM_14;
+    button_2_cfg.pin = GPIO_NUM_0;
+    // button_2_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_0 : GPIO_NUM_14;
     button_2_cfg.semaphore = xSemaphoreCreateBinary();
     BaseType_t status = xTaskCreatePinnedToCore(
         Button::action,
@@ -311,11 +312,12 @@ void setup() {
 
     // Configure User Buttons
     button_1_cfg.config = &config;
-    button_1_cfg.isr = (screen_rotation == 1) ? &handle_button_1_interrupt :  &handle_button_2_interrupt;
+    button_1_cfg.isr = &handle_button_1_interrupt;
     button_1_cfg.interrupt_handler_short = (screen_rotation == 1) ? &action_dim : &action_unused;
     button_1_cfg.interrupt_handler_long = (screen_rotation == 1) ? &action_eco_mode : &action_reset;
     button_1_cfg.interrupt_handler_double = (screen_rotation == 1) ? &action_switch_layout : &action_reconfigure;
-    button_1_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_14 : GPIO_NUM_0;
+    button_1_cfg.pin = GPIO_NUM_14;
+    // button_1_cfg.pin = (screen_rotation == 1) ? GPIO_NUM_14 : GPIO_NUM_0;
     button_1_cfg.semaphore = xSemaphoreCreateBinary();
     status = xTaskCreatePinnedToCore(
         Button::action,
