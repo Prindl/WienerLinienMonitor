@@ -52,8 +52,8 @@ void WLDeparture::task_update(void * pvParameters) {
     }    
     char url[140] = URL_WIENER_LINIEN; // 11 RBLs reserved
     const int pos = strlen(url);
-    // To switch away from stream parsing if it fails
-    bool use_stream_parsing = true;
+    // To switch away from stream parsing if it fails, currently disabled
+    bool use_stream_parsing = false;
     while(true) {
         // 1. SLEEP: Wait indefinitely for the Timer to notify this task
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
