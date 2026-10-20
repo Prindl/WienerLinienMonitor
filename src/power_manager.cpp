@@ -96,6 +96,10 @@ void PowerManager::setup() {
         this->_tft.println(StringDatabase::GetWiFissid());
     }
 
+    // Set a 15min timeout if no client connects to the soft AP to restart ESP.
+    // This is helpful to avoid the device hanging on the setup screen if it is already configured
+    // because of an internet connection problem
+    wifi_manager.setConfigPortalTimeout(900);
     // Attempt to connect to Wi-Fi
     bool isConnected = wifi_manager.autoConnect(StringDatabase::GetWiFissid().c_str());
 
